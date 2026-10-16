@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/16 17:16:28 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/16 18:23:00 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <pthread.h>
 
 #endif
