@@ -6,13 +6,36 @@
 #    By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/10/16 13:53:00 by vabad-ro          #+#    #+#              #
-#    Updated: 2026/10/16 13:53:02 by vabad-ro         ###   ########.fr        #
+#    Updated: 2026/10/16 18:02:26 by vabad-ro         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
-all:
-	run
+
+NAME = codexion
+
+CC = cc
+
+CFLAGS = -Wall -Wextra -Werror
+
+SRC = main.c
+OBJ = $(SRC:.c=.o)
+
+INCLUDE = codexion.h
+
+RM = rm -f
+
+all: $(NAME)
+
+	$(NAME): $(OBJ)
+	cc $(OBJ) -o $(NAME)
 
 
-# # El Makefile entregado debe contener al menos las normas $(NAME), all, clean,
-# fclean y re.
+clean:
+	$(RM) $(OBJ)
+
+fclean: clean
+	$(RM) $(NAME)
+
+re : fclean all
+
+.PHONY: all clean fclean re
