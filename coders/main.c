@@ -6,12 +6,15 @@
 /*   By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:37:19 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/16 13:50:45 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/16 14:18:53 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
+#include "codexion.h"
 
 int main(void){
 
-    return 0
+    printf("Hola");
+ 
+    return 0;
 }

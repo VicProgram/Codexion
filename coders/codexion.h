@@ -6,9 +6,15 @@
 /*   By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/16 14:00:42 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/16 14:18:58 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef  CODEXON_H
+
+#ifndef  CODEXION_H
 # define CODEXION_H
+
+
+#include <stdio.h>
+
+#endif
