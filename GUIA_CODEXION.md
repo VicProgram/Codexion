@@ -13,6 +13,56 @@
 
 ---
 
+## ⭐ DÓNDE ESTAMOS AHORA (actualizado 2026-10-19)
+
+> **Esta es la sección que te dice qué hacer a continuación. Empieza siempre por aquí.**
+
+| # | Hito | Estado | Qué falta |
+|---|---|---|---|
+| — | Estructura de carpetas + Makefile + header | ✅ **Hecho** | nada |
+| M0 | Compila, norminette y sin relink | ✅ **Hecho** | nada |
+| M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* no guarda los números todavía: eso llega en M2 |
+| M2 | Estado compartido e inicialización | 🔴 **SIGUIENTE** | pensar los structs, luego `init`/`cleanup` |
+| M3 | Hilos y ciclo del coder | ⬜ Pendiente | — |
+| M4 | Adquirir/soltar dongles (mutex) | ⬜ Pendiente | — |
+| M5 | Cooldown | ⬜ Pendiente | — |
+| M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
+| M7 | Planificación EDF | ⬜ Pendiente | — |
+| M8 | Monitor y detección de burnout | ⬜ Pendiente | — |
+| M9 | Log serializado | ⬜ Pendiente | — |
+| M10 | Terminación y limpieza (sin leaks) | ⬜ Pendiente | — |
+| V | Verificación (norma, leaks, tests, README) | ⬜ Pendiente | — |
+| D | Defensa (recode + preguntas) | ⬜ Pendiente | — |
+
+**En una frase:** el programa **compila, pasa la norma y rechaza argumentos inválidos**.
+Ahora mismo no hace nada más: arranca, valida y sale. El siguiente paso es **darle memoria** (M2).
+
+### Regla para avanzar
+
+1. Abre la lección del hito que toca (abajo está el enlace).
+2. Léela entera **antes** de escribir código.
+3. Escribe el código tú; si algo no cabe en la Norm, es señal de que la función hace demasiado → pártela.
+4. Antes de marcar ✅: `make` limpio + `norminette coders/` a 0 + la prueba del checkpoint.
+5. Commit pequeño y marca la casilla en la tabla de arriba.
+
+### Índice → qué lección mirar según el hito
+
+| Hito | Lección |
+|---|---|
+| M0 | [Lección 17](#lección-17-m0--estructura-makefile-y-norm) |
+| M1 | [Lección 18](#lección-18-m1--parsing-y-validación) |
+| M2 | [Lección 19](#lección-19-m2--estado-compartido-e-inicialización) ← **estás aquí** |
+| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) |
+| M4 | [Lección 21](#lección-21-m4--adquirirsoltar-dongles-mutex) |
+| M5 | [Lección 22](#lección-22-m5--cooldown) |
+| M6 | [Lección 23](#lección-23-m6--el-heap-y-la-planificación-fifo) |
+| M7 | [Lección 24](#lección-24-m7--planificación-edf) |
+| M8 | [Lección 25](#lección-25-m8--el-monitor-y-la-detección-de-burnout) |
+| M9 | [Lección 26](#lección-26-m9--log-serializado) |
+| M10 | [Lección 27](#lección-27-m10--terminación-y-limpieza-sin-leaks) |
+
+---
+
 ## Índice
 
 **PARTE 0 — Antes de escribir código**
@@ -40,18 +90,18 @@
 - Lección 15: El monitor como observador
 - Lección 16: Diseñar dos veces (módulos profundos)
 
-**PARTE IV — Manos a la obra (por hitos)**
-- Lección 17: M0 — Estructura, Makefile y Norm
-- Lección 18: M1 — Parsing y validación
-- Lección 19: M2 — Estado compartido e inicialización
-- Lección 20: M3 — Hilos y el ciclo del coder
-- Lección 21: M4 — Adquirir/soltar dongles (mutex)
-- Lección 22: M5 — Cooldown
-- Lección 23: M6 — El heap y la planificación FIFO
-- Lección 24: M7 — Planificación EDF
-- Lección 25: M8 — El monitor y la detección de burnout
-- Lección 26: M9 — Log serializado
-- Lección 27: M10 — Terminación y limpieza (sin leaks)
+**PARTE IV — Manos a la obra (por hitos)** · *(✅ = hecho, 🔴 = siguiente, ⬜ = pendiente)*
+- Lección 17: M0 — Estructura, Makefile y Norm · **✅**
+- Lección 18: M1 — Parsing y validación · **✅**
+- Lección 19: M2 — Estado compartido e inicialización · **🔴 SIGUIENTE**
+- Lección 20: M3 — Hilos y el ciclo del coder · ⬜
+- Lección 21: M4 — Adquirir/soltar dongles (mutex) · ⬜
+- Lección 22: M5 — Cooldown · ⬜
+- Lección 23: M6 — El heap y la planificación FIFO · ⬜
+- Lección 24: M7 — Planificación EDF · ⬜
+- Lección 25: M8 — El monitor y la detección de burnout · ⬜
+- Lección 26: M9 — Log serializado · ⬜
+- Lección 27: M10 — Terminación y limpieza (sin leaks) · ⬜
 
 **PARTE V — Verificación**
 - Lección 28: Norminette y estilo
@@ -625,32 +675,70 @@ de una interfaz pequeña. ¿Qué interfaz mínima necesitaría tu “mesa”? Al
 
 ## LECCIÓN 17: M0 — Estructura, Makefile y Norm
 
+**Estado: ✅ HECHO.**
+
 Crea `coders/`, tu `.h`, y el `Makefile` con las reglas `$(NAME) all clean fclean re`.
 Flags: `-Wall -Wextra -Werror -pthread`, compilador `cc`, **sin relink**.
 
-- [ ] `make` produce `codexion`; `make re` no deja basura; `make fclean` limpia el binario.
+Qué se consiguió:
+- `coders/Makefile`, `coders/codexion.h`, `coders/main.c`.
+- `make`, `make re` y `make fclean` funcionan; el enlace usa `$(CFLAGS)` (incluye `-pthread`).
+- Norminette limpio en los archivos que existen.
+
+- [x] `make` produce `codexion`; `make re` no deja basura; `make fclean` limpia el binario.
 
 ---
 
 ## LECCIÓN 18: M1 — Parsing y validación
 
+**Estado: ✅ HECHO.**
+
 Implementa: contar argumentos, convertir a números, validar (negativos, no enteros, scheduler), y guardarlos
 en tu estructura de simulación.
 
-- [ ] Guardo todos los parámetros en mi struct y **rechazo** entradas inválidas sin leaks.
+Qué se consiguió:
+
+- `main` comprueba que hay exactamente 9 tokens (`argc == 9`).
+- `check_number(char **args)` valida **formato** de los 7 argumentos numéricos: todos los
+  caracteres deben ser dígitos y debe haber al menos uno (`j == 0` detecta la cadena vacía).
+  Rechaza `12a`, `1.5`, `-4`, `abc` y `""`.
+- `check_scheduler(char **args)` exige exactamente `fifo` o `edf`.
+- `parse_args` orquesta las dos anteriores y devuelve 0/1; `main` sale con código ≠ 0 si falla.
+- Mensajes de error por `stderr` con `\n`. Norminette limpio.
+
+Lo que **queda fuera de M1** a propósito:
+
+- El rechazo por **valor** (p. ej. `number_of_coders == 0`) se decidirá al construir la `t_sim` (M2).
+- El **desbordamiento** (`99999999999` pasa el formato) se detectará al convertir, no en `check_number`.
+- Los números todavía **no se guardan**: no hay struct hasta M2.
+
+- [x] Rechazo entradas inválidas sin leaks (`12a`, `""`, `-4`, `fifoX`, faltan args → `exit 1`).
+- [ ] Guardo todos los parámetros en mi struct (**esto es parte de M2**).
 
 ---
 
 ## LECCIÓN 19: M2 — Estado compartido e inicialización
 
+**Estado: 🔴 SIGUIENTE.**
+
 Reserva el array de dongles y de coders, inicializa mutex y cond de cada dongle, crea el mutex del log.
 Define la convención izquierda/derecha.
+
+**Antes de escribir código**, haz las tres listas (no se inventan los structs, se deducen):
+
+1. `t_coder`: ¿qué necesita recordar cada persona? (ciclo, deadline, nº de compilaciones, sus dos dongles).
+2. `t_dongle`: ¿qué necesita saber cada dongle? (libre/ocupado, cooldown, quién lo tiene).
+3. `t_sim`: ¿qué es de todos a la vez? (parámetros, flag de parada, mutex de log, arrays).
+
+Preguntas guía: ¿quién modifica cada campo? ¿qué mutex lo protege? ¿qué se destruye y en qué orden?
 
 - [ ] `init` crea todo y `cleanup` lo destruye simétricamente (pruébalo ya con valgrind).
 
 ---
 
 ## LECCIÓN 20: M3 — Hilos y el ciclo del coder
+
+**Estado: ⬜ Pendiente.**
 
 Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles**, hace un ciclo simple
 imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
@@ -661,6 +749,8 @@ imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
 
 ## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex)
 
+**Estado: ⬜ Pendiente.**
+
 Añade el estado real de los dongles y la sección crítica: solo se compila teniendo los **dos**.
 Aquí es donde blindas contra el **deadlock**.
 
@@ -670,6 +760,8 @@ Aquí es donde blindas contra el **deadlock**.
 
 ## LECCIÓN 22: M5 — Cooldown
 
+**Estado: ⬜ Pendiente.**
+
 Añade `cooldown_until` y haz que quien quiera el dongle espere (`cond_timedwait`) hasta que expire.
 
 - [ ] Tras soltar, el dongle no vuelve a aparecer libre antes de `dongle_cooldown` ms.
@@ -677,6 +769,8 @@ Añade `cooldown_until` y haz que quien quiera el dongle espere (`cond_timedwait
 ---
 
 ## LECCIÓN 23: M6 — El heap y la planificación FIFO
+
+**Estado: ⬜ Pendiente.**
 
 Implementa el heap y la **cola de solicitudes** por dongle. Con `fifo`, concede al que llegó antes.
 
@@ -686,6 +780,8 @@ Implementa el heap y la **cola de solicitudes** por dongle. Con `fifo`, concede 
 
 ## LECCIÓN 24: M7 — Planificación EDF
 
+**Estado: ⬜ Pendiente.**
+
 Cambia la clave del heap a `deadline` cuando el scheduler es `edf`.
 
 - [ ] Con `edf` y parámetros viables, **nadie se agota**; con `fifo` puede agotarse alguien.
@@ -693,6 +789,8 @@ Cambia la clave del heap a `deadline` cuando el scheduler es `edf`.
 ---
 
 ## LECCIÓN 25: M8 — El monitor y la detección de burnout
+
+**Estado: ⬜ Pendiente.**
 
 Haz que el monitor vigile todos los deadlines y, al vencer, escriba “X burned out” (≤ 10 ms) y detenga
 la simulación.
@@ -703,6 +801,8 @@ la simulación.
 
 ## LECCIÓN 26: M9 — Log serializado
 
+**Estado: ⬜ Pendiente.**
+
 Centraliza todas las escrituras en una función que usa el **mutex de log**.
 
 - [ ] Lanzo `n` grande y **nunca** se mezclan dos mensajes en una línea.
@@ -710,6 +810,8 @@ Centraliza todas las escrituras en una función que usa el **mutex de log**.
 ---
 
 ## LECCIÓN 27: M10 — Terminación y limpieza (sin leaks)
+
+**Estado: ⬜ Pendiente.**
 
 Terminar cuando: alguien se agota **o** todos compilan ≥ `number_of_compiles_required`.
 `join` de todos los hilos y `cleanup` total (mutex, cond, heaps).
@@ -722,6 +824,8 @@ Terminar cuando: alguien se agota **o** todos compilan ≥ `number_of_compiles_r
 
 ## LECCIÓN 28: Norminette y estilo
 
+**Estado: ⬜ Pendiente (se comprueba en cada hito).**
+
 `norminette coders/` hasta **0 errores**. Ojo: también cuentan los archivos/funciones extra.
 
 - [ ] Norminette limpio en todo `coders/`.
@@ -729,6 +833,8 @@ Terminar cuando: alguien se agota **o** todos compilan ≥ `number_of_compiles_r
 ---
 
 ## LECCIÓN 29: Leaks y sanitizers
+
+**Estado: ⬜ Pendiente (se comprueba en M2 cuando exista `cleanup`).**
 
 - `valgrind --leak-check=full`
 - `valgrind --tool=helgrind` (carreras)
@@ -739,6 +845,8 @@ Terminar cuando: alguien se agota **o** todos compilan ≥ `number_of_compiles_r
 ---
 
 ## LECCIÓN 30: Pruebas y casos límite
+
+**Estado: ⬜ Pendiente (hay pruebas parciales de M1 ya pasadas).**
 
 Prueba a mano (y guarda tus comandos):
 
