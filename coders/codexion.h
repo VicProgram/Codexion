@@ -1,22 +1,25 @@
 /* ************************************************************************** */
 /*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   codexion.h                                         :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/16 18:23:00 by vabad-ro         ###   ########.fr       */
+/*                                                       :::      ::::::::    */
+/*   codexion.h                                        :+:      :+:    :+:    */
+/*                                                   +:+ +:+         +:+      */
+/*   By: username <username@student.42tokyo.jp>    #+#  +:+       +#+         */
+/*                                               +#+#+#+#+#+   +#+            */
+/*   Created: 2026/10/16 13:52:54 by username         #+#    #+#              */
+/*   Updated: 2026/10/19 19:38:37 by username        ###   ########.fr        */
 /*                                                                            */
 /* ************************************************************************** */
 
-
-#ifndef  CODEXION_H
+#ifndef CODEXION_H
 # define CODEXION_H
 
+# include <pthread.h>
+# include <stdio.h>
+# include <stdlib.h>
+# include <string.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
+int	check_number(char **args);
+int	check_scheduler(char **args);
+int	parse_args(char **args);
 
 #endif

@@ -6,37 +6,54 @@
 /*   By: username <username@student.42tokyo.jp>    #+#  +:+       +#+         */
 /*                                               +#+#+#+#+#+   +#+            */
 /*   Created: 2026/10/16 13:37:19 by username         #+#    #+#              */
-/*   Updated: 2026/10/19 16:06:51 by username        ###   ########.fr        */
+/*   Updated: 2026/10/19 19:37:11 by username        ###   ########.fr        */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 
-int	parse_args(int n_args, char **args)
+int	check_number(char **args)
 {
 	int	i;
-	int	value;
+	int	j;
 
-	if (strcmp(args[8], "fifo") != 0 && strcmp(args[8], "edf") != 0)
-	{
-		fprintf(stderr, "Error: Scheduler must be 'fifo' or 'edf'\n");
-		return (0);
-	}
 	i = 1;
+	j = 0;
 	while (i < 8)
 	{
-		if (args[i][0] == '-')
+		while (args[i][j] != '\0')
 		{
-			fprintf(stderr, "Error: Negative numbers are not allowed");
-			return (0);
+			if (args[i][j] >= '0' && args[i][j] <= '9')
+				j++;
+			else
+				return (0);
 		}
-		value = atoi(args[i]);
-		if (value < 0)
-		{
-			fprintf(stderr, "Can't use negative numbers\n");
+		if (j == 0)
 			return (0);
-		}
 		i++;
+		j = 0;
+	}
+	return (1);
+}
+
+int	check_scheduler(char **args)
+{
+	if (strcmp(args[8], "fifo") != 0 && strcmp(args[8], "edf") != 0)
+		return (0);
+	return (1);
+}
+
+int	parse_args(char **args)
+{
+	if (!check_number(args))
+	{
+		fprintf(stderr, "Error: invalid argument\n");
+		return (0);
+	}
+	if (!check_scheduler(args))
+	{
+		fprintf(stderr, "Error: invalid argument\n");
+		return (0);
 	}
 	return (1);
 }
@@ -48,7 +65,7 @@ int	main(int argc, char **argv)
 		fprintf(stderr, "Error: Invalid number of arguments\n");
 		return (1);
 	}
-	if (!parse_args(argc, argv))
+	if (!parse_args(argv))
 		return (1);
 	return (0);
 }
