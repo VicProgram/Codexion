@@ -6,7 +6,7 @@
 /*   By: username <username@student.42tokyo.jp>    #+#  +:+       +#+         */
 /*                                               +#+#+#+#+#+   +#+            */
 /*   Created: 2026/10/16 13:37:19 by username         #+#    #+#              */
-/*   Updated: 2026/10/19 16:04:38 by username        ###   ########.fr        */
+/*   Updated: 2026/10/19 16:06:51 by username        ###   ########.fr        */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,7 +27,7 @@ int	parse_args(int n_args, char **args)
 	{
 		if (args[i][0] == '-')
 		{
-			fprintf(stderr, "Error: Negative numbers are not forbidden");
+			fprintf(stderr, "Error: Negative numbers are not allowed");
 			return (0);
 		}
 		value = atoi(args[i]);
@@ -45,7 +45,7 @@ int	main(int argc, char **argv)
 {
 	if (argc != 9)
 	{
-		fprintf(stderr, "Error en el número de argumentos\n");
+		fprintf(stderr, "Error: Invalid number of arguments\n");
 		return (1);
 	}
 	if (!parse_args(argc, argv))
