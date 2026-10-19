@@ -1,44 +1,54 @@
 /* ************************************************************************** */
 /*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   main.c                                             :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: vabad-ro <vabad-ro@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/10/16 13:37:19 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/16 19:12:30 by vabad-ro         ###   ########.fr       */
+/*                                                       :::      ::::::::    */
+/*   main.c                                            :+:      :+:    :+:    */
+/*                                                   +:+ +:+         +:+      */
+/*   By: username <username@student.42tokyo.jp>    #+#  +:+       +#+         */
+/*                                               +#+#+#+#+#+   +#+            */
+/*   Created: 2026/10/16 13:37:19 by username         #+#    #+#              */
+/*   Updated: 2026/10/19 16:04:38 by username        ###   ########.fr        */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 
+int	parse_args(int n_args, char **args)
+{
+	int	i;
+	int	value;
+
+	if (strcmp(args[8], "fifo") != 0 && strcmp(args[8], "edf") != 0)
+	{
+		fprintf(stderr, "Error: Scheduler must be 'fifo' or 'edf'\n");
+		return (0);
+	}
+	i = 1;
+	while (i < 8)
+	{
+		if (args[i][0] == '-')
+		{
+			fprintf(stderr, "Error: Negative numbers are not forbidden");
+			return (0);
+		}
+		value = atoi(args[i]);
+		if (value < 0)
+		{
+			fprintf(stderr, "Can't use negative numbers\n");
+			return (0);
+		}
+		i++;
+	}
+	return (1);
+}
+
 int	main(int argc, char **argv)
 {
 	if (argc != 9)
 	{
-        printf(stderr, "Error en el número de argumentos\n");
-        return (1);
-    }
-
-    if	(strcmp(argv[8], "fifo") != 0 && strcmp(argv[8], "edf") != 0){
-		printf(stderr, "Error: Scheduler must be 'fifo' or 'edf'\n");
+		fprintf(stderr, "Error en el número de argumentos\n");
 		return (1);
 	}
-	int	i;
-	i = 1;
-	while	(i < argc){
-		if(argv[i][0] == "-"){
-			printf(stderr, "Error: Negative numbers are not forbidden");
-			return (1);
-        }
-        int value;
-        value = atoi(argv[i]);
-		if (value < 0)
-		{
-				printf(stderr, "Can't use negative numbers\n");
-				return (1);
-			}
-			i++;
-    }
-    return 0;
+	if (!parse_args(argc, argv))
+		return (1);
+	return (0);
 }
