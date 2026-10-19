@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/19 20:49:21 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/19 21:08:30 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -61,9 +61,11 @@ typedef struct s_coder
 
 int	check_number(char **args);
 int	check_scheduler(char **args);
-int	parse_args(char **args);
+int	check_range(t_sim *sim);
+int	parse_args(t_sim *sim, char **args);
+int	init(t_sim *sim);
 
-int		init(t_sim *sim);
+void	fill_sim(t_sim *sim, char **args);
 void	cleanup(t_sim *sim);
 
 #endif
