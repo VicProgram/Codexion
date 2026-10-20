@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
-/*                                                       :::      ::::::::    */
-/*   init.c                                            :+:      :+:    :+:    */
-/*                                                   +:+ +:+         +:+      */
-/*   By: vabad-ro <vabad-ro@student.42madrid.com>  #+#  +:+       +#+         */
-/*                                               +#+#+#+#+#+   +#+            */
-/*   Created: 2026/10/19 20:48:01 by vabad-ro         #+#    #+#              */
-/*   Updated: 2026/10/20 18:10:27 by vabad-ro        ###   ########.fr        */
+/*                                                        :::      ::::::::   */
+/*   init.c                                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/19 20:48:01 by vabad-ro          #+#    #+#             */
+/*   Updated: 2026/10/20 18:21:08 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@ static int	init_dongles(t_sim *sim)
 	int	i;
 
 	i = 0;
-	sim->dongles = malloc(sizeof(t_dongle)*sim->n_coders);
+	sim->dongles = malloc(sizeof(t_dongle) * sim->n_coders);
 	if (sim->dongles == NULL)
 		return (0);
 	while (i < sim->n_coders)
@@ -35,7 +35,7 @@ static int	init_coders(t_sim *sim)
 	int	i;
 
 	i = 0;
-	sim->coders = malloc(sizeof(t_coder)*sim->n_coders);
+	sim->coders = malloc(sizeof(t_coder) * sim->n_coders);
 	if (sim->coders == NULL)
 		return (0);
 	while (i < sim->n_coders)
