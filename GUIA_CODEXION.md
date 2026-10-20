@@ -76,6 +76,7 @@ hilos todavía. El siguiente paso es **lanzar los hilos** (M3).
 - Lección 4: Interbloqueo (deadlock) y condiciones de Coffman
 - Lección 5: Inanición (starvation) y equidad
 - Lección 6: El tiempo: `gettimeofday`, `usleep` y precisión
+- Lección 6.5: Arrays, memoria dinámica y el bucle que recorre *(añadida tras M2)*
 
 **PARTE II — Entender el problema Codexion**
 - Lección 7: El modelo (coders, estados, dongles)
@@ -144,6 +145,21 @@ La dificultad no está en escribir mucho código, sino en escribir **poco códig
 | `-fsanitize=thread` | detectar *data races* | compilar con extra y ejecutar |
 | `git` | guardar versiones | commit pequeño tras cada hito |
 
+Si faltan, se instalan así:
+
+```bash
+uv tool install norminette        # norminette, sin romper el python del sistema
+sudo apt-get install valgrind     # valgrind (pide contraseña)
+```
+
+> **Aviso real (pasó en M2):** las extensiones "42 formatter" de VS Code reformatean tu código al
+> guardar con reglas **distintas** al norminette real (quitaban los espacios de `a * b`, que la Norm
+> exige). Desinstálalas o desactiva `formatOnSave`. El juez es la CLI: `norminette coders/`.
+
+**El bucle de trabajo que funciona** (probado en M2): escribes tu versión → la pegas y razonas las
+dudas → compuebas con `make` y `norminette` **tras cada cambio pequeño**, no al final. El compilador
+y el norminette son revisores gratis que no se cansan.
+
 ### 0.3. Cómo pedir ayuda sin hacer trampa
 
 El subject es claro: puedes usar IA para tareas repetitivas, pero **solo puedes entregar lo que entiendes**.
@@ -178,6 +194,58 @@ van a lo suyo.
 - `pthread_create(&t, NULL, función, argumento)` → nace un hilo que ejecuta `función(argumento)`.
 - `pthread_join(t, NULL)` → el hilo principal espera a que `t` termine.
 - El **argumento** es un `void *`: normalmente le pasas un puntero a una estructura con todo lo que el hilo necesita.
+
+La función de un hilo tiene **firma fija**: `void *mi_hilo(void *arg)`. Dentro casteas el argumento
+(`t_coder *c = arg;`) y devuelves `NULL` al terminar.
+
+```c
+pthread_t   t;
+t_coder     c;
+
+pthread_create(&t, NULL, coder_loop, &c);  // coder_loop corre EN PARALELO con main
+pthread_join(t, NULL);                      // main se bloquea hasta que coder_loop acabe
+```
+
+Dos detalles: `pthread_create` devuelve 0 si fue bien (hay que comprobarlo), y **no se puede hacer
+`join` de un hilo que no se creó**.
+
+### 1.3. Join, detach... y por qué el proceso muere con los hilos dentro
+
+Un hilo no tiene vida propia: vive **dentro** del proceso. Cuando `main` hace `return 0`, el SO mata
+al instante todos los hilos, aunque estén a medio `printf`. Ejecuta este experimento:
+
+```c
+void	*lenta(void *a)
+{
+	(void)a;
+	sleep(2);
+	printf("hilo: termine\n");
+	return (NULL);
+}
+
+int	main(void)
+{
+	pthread_t	t;
+
+	pthread_create(&t, NULL, lenta, NULL);
+	return (0);   // sin join: "hilo: termine" NUNCA aparece
+}
+```
+
+Hay dos formas de gestionar el final de un hilo, y se eligen con una sola pregunta:
+**¿necesito esperar a que acabe?**
+
+| | `pthread_join(t, NULL)` | `pthread_detach(t)` |
+|---|---|---|
+| ¿Main espera? | Sí, se bloquea | No |
+| ¿Sabes cuándo terminó? | Sí | No |
+| ¿Puedes hacer join luego? | Sí | No (es error) |
+| Recursos del hilo | Los recoge el join | Los recoge el SO |
+| Útil para | "nadie apaga las luces hasta que salga el último" | tareas sueltas sin orden |
+
+Codexion usa **join**: `main` debe esperar a que todos los hilos terminen antes de `cleanup`
+(destruir mutex con hilos vivos que los usan = desastre). Patrón para todo el proyecto:
+**crear todos → join de todos → cleanup**.
 
 En Codexion: **cada coder es un hilo**, y hay **un hilo extra: el monitor**.
 
@@ -214,6 +282,35 @@ Un **mutex** (`pthread_mutex_t`) es un candado: solo un hilo puede tenerlo a la 
 - `pthread_mutex_init` / `pthread_mutex_destroy` → crear/destruir.
 
 Regla de oro: **sección crítica pequeña**. Coge el mutex, haz el mínimo, suelta. No hagas `usleep` con el mutex cogido.
+
+### 2.3. La carrera en vivo (experimento que puedes ejecutar)
+
+5 hilos sumando 200.000 veces cada uno a la misma variable, **sin mutex**:
+
+```c
+void	*trabajo(void *a)
+{
+	int	i;
+
+	(void)a;
+	i = 0;
+	while (i < 200000)
+	{
+		compartida = compartida + 1;
+		i++;
+	}
+	return (NULL);
+}
+```
+
+Salida real: `esperado: 1000000 | real: 317101`. Se pierden ~700.000 sumas. ¿Por qué?
+`compartida + 1` son 3 pasos (leer → sumar → escribir) y el SO intercambia entre hilos a mitad:
+A lee 1000, B lee 1000, A escribe 1001, B escribe 1001 → una suma desaparece.
+
+El mismo programa con `lock` → `compartida++` → `unlock` da **1.000.000 siempre**.
+
+En Codexion, esto es exactamente lo que pasaría si dos coders "leen" el mismo dongle libre a la vez:
+ambos creerían que se lo llevan. El mutex es lo que impide la doble lectura.
 
 ### Qué tener en cuenta
 
@@ -353,6 +450,134 @@ La solución es el **planificador**: cuando varios piden a la vez, la mesa decid
 ### Checkpoint
 
 - [ ] Sé convertir un `struct timeval` a milisegundos y comparar dos tiempos.
+
+---
+
+## LECCIÓN 6.5: Arrays, memoria dinámica y el bucle que recorre
+
+> **Añadida tras M2**, porque todos los bugs reales de ese hito vinieron de aquí. Léela despacio:
+> son 20 minutos que te ahorran horas.
+
+### 6.5.1. ¿Por qué un array y no variables sueltas?
+
+El número de coders lo decide el usuario al arrancar: `./codexion 7 ...` o `./codexion 50 ...`.
+En C, las variables se declaran con tamaño fijo **al compilar**: no puedes escribir
+`t_coder c1, c2, ..., cN` porque N no la sabes. La única respuesta es **reservar memoria en
+tiempo de ejecución**:
+
+```c
+sim->dongles = malloc(sizeof(t_dongle) * sim->n_coders);
+```
+
+Eso crea **un bloque contiguo** de n posiciones y devuelve su dirección:
+
+```
+sim->dongles ──▶ [ dongle 0 ][ dongle 1 ][ dongle 2 ]
+                   índice 0    índice 1    índice 2
+```
+
+Un bloque = **una sola reserva = un solo `free`** al final. Los "elementos" no existen aparte:
+son posiciones dentro del bloque, y se acceden con `sim->dongles[i]`.
+
+### 6.5.2. La regla de oro: reservar una vez, rellenar n veces
+
+El error más repetido de M2 fue meter el `malloc` **dentro** del bucle:
+
+```c
+while (i < n)
+{
+	sim->dongles = malloc(...);   // ❌ CREA UN BLOQUE NUEVO en cada vuelta
+	...
+	i++;
+}
+```
+
+Traza con `n = 3`: se crean 3 arrays; los 2 primeros quedan **huérfanos** (leak); el puntero solo
+guarda el último. Y solo rellenas un elemento por vuelta, del bloque que acabas de tirar.
+
+```c
+sim->dongles = malloc(...);       // ✅ UNA reserva, fuera del bucle
+while (i < n)
+{
+	/* rellena dongles[i] */      // ✅ el bucle SOLO rellena
+	i++;
+}
+```
+
+**Mentalidad:** el `malloc` **crea** el bloque entero de golpe; el bucle **recorre** poniendo cada
+posición a su valor. Crear n veces = perder n-1 bloques.
+
+### 6.5.3. Índices de 0 a n-1 (y el truco del `%`)
+
+Los índices de un array van de `0` a `n - 1`. Un bucle con `i = 1` deja el elemento **0 con
+basura** — y con `n = 1`, `while (i < 1)` **no se ejecuta ni una vez** (caso especial obligatorio
+del subject: una persona, un dongle, y quedaría sin inicializar).
+
+Para dar la vuelta a la mesa circular se usa el **resto de la división** (`%`). Con `n = 4`:
+
+| i | i+1 | (i+1) % 4 |
+|---|-----|-----------|
+| 0 | 1 | 1 |
+| 1 | 2 | 2 |
+| 2 | 3 | 3 |
+| 3 | 4 | **0** ← el último se empareja con el primero |
+
+Con `n = 1`: `(0 + 1) % 1 = 0` → `left == right == &dongles[0]`. Correcto según el subject.
+
+### 6.5.4. Índice ≠ id
+
+Dos números que se confunden fácilmente:
+
+- `i` = posición en memoria, **0-based** (`0 .. n-1`).
+- `coder_id` = el número que imprime el log, **1-based** (`1 .. n`). Por eso: `coder_id = i + 1`.
+
+Si empiezas el bucle en `i = 1` "para que el id empiece en 1", pierdes el elemento 0 y los ids
+salen desplazados (`2, 3, 4, 5`). El `+1` va **dentro de la asignación**, no en el índice.
+
+### 6.5.5. malloc vs calloc (da igual aquí)
+
+`malloc` deja basura; `calloc` deja ceros. Pero en Codexion **todos** los campos se inicializan a
+mano (`is_free = 1` no cabe en un cero; el mutex necesita `pthread_mutex_init`; `coder_id` es
+`i + 1`), así que el ahorro del `calloc` son tres líneas y **oculta** la inicialización: si mañana
+añades un campo y te olvidas de él, con `calloc` "funciona" hasta que no. Elige `malloc` + init
+explícito.
+
+### 6.5.6. Cuatro trampas de sintaxis que causaron bugs reales
+
+1. **`if (!init_dongles)` sin paréntesis** no ejecuta nada: el nombre de una función en C es su
+   dirección de memoria (siempre distinta de NULL) → el `if` es siempre falso. Necesitas
+   `if (!init_dongles(sim))`. Regla: paréntesis = ejecutar; sin paréntesis = solo el puntero.
+2. **`x == NULL` pregunta, `x = NULL` asigna.** `&x == NULL` no pone nada a NULL, solo compara y
+   tira la respuesta.
+3. **`sim->dongles[i].mutex;` es una sentencia sin efecto**: lee el mutex y descarta el valor.
+   Si querías crearlo, falta `pthread_mutex_init(...)`. Si una línea no llama a una función ni
+   asigna, normalmente no hace nada.
+4. **Falta `return (1)` en un helper**: el llamante lee basura y actúa en base a ella. Toda ruta
+   de éxito debe devolver su valor.
+
+### 6.5.7. El orden de `cleanup` (post-mortem de M2)
+
+`cleanup` es el espejo de `init` y se divide en tres zonas con **orden fijo**:
+
+```
+1. bucle:   destroy de cada dongles[i].mutex    (usa el array)
+2. únicos:  destroy de stop_mutex y log_mutex
+3. memoria: free(dongles); free(coders);   y SOLO ENTONCES   = NULL
+```
+
+Trampas que ya fallaron una vez:
+
+- `free` **dentro** del bucle → destruyes mutex sobre memoria liberada y haces double free.
+- `= NULL` **dentro** del bucle → la vuelta siguiente desreferencia NULL (segfault) y los `free`
+  posteriores son `free(NULL)` (no libran nada → leak). El `NULL` es el **cierre de puertas**:
+  al final, después de todo el trabajo.
+- `free` elemento a elemento: **no**. Un array = **un solo `free`**.
+
+### Checkpoint
+
+- [ ] Sé dibujar el bloque de memoria de `dongles`/`coders` y las flechas `left`/`right`.
+- [ ] Sé decir por qué el `malloc` va fuera del bucle y el `free` también.
+- [ ] Con `n = 1`, sé predecir qué hace cada bucle de tu `init` **sin ejecutarlo**.
 
 ---
 
@@ -743,10 +968,34 @@ Qué se consiguió (commits `f06142a`..`d1880cd`):
 
 **Estado: 🔴 SIGUIENTE.**
 
-Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles**, hace un ciclo simple
-imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
+Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles reales**, hace un ciclo
+simple imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
+
+**Lectura previa obligatoria:** Lección 1.2 y 1.3 (crear, esperar y por qué `join`).
+Los conceptos ya los tienes: esto es cablearlos.
+
+### Decisiones que vas a tomar
+
+1. **La función del hilo** firma `void *coder_loop(void *arg)`. El argumento que le pasas a
+   `pthread_create` es `&sim->coders[i]` (o `sim`, tu elección); dentro casteas y ya tienes todo.
+2. **Dónde crear el hilo**: un bucle en `main` (o en una `start_threads`). `pthread_t` ya lo tienes
+   en `t_coder.thread` — guárdalo ahí, no en variables sueltas.
+3. **Comprobar el return de `pthread_create`** (0 = bien). Si falla en el hilo nº 3, los hilos
+   1 y 2 **ya existen**: tienes que hacer `join` de los que se crearon antes de salir.
+4. **`join` antes de `cleanup`**: patrón del proyecto — crear todos → join de todos → cleanup.
+   Sin join, el proceso mata los hilos a mitad de nada (Lección 1.3).
+5. **Nuevo archivo `coder.c`** (añádelo al `SRC` del Makefile). `init.c` ya tiene 4 funciones y
+   el máximo son 5.
+
+### Preguntas antes de escribir código
+
+1. ¿Cómo sabe cada coder cuándo parar? Piensa en `sim->stop` + `stop_mutex`: ¿por qué un simple
+   `int` necesita mutex para ser leído desde otros hilos? (pista: Lección 2).
+2. Con `n = 5` y `usleep` dentro del ciclo, ¿por qué podrías ver los 5 mensajes **intercalados**
+   y no "1 termina, luego empieza el 2"? ¿Es eso un error?
 
 - [ ] Veo en pantalla el ciclo compile→debug→refactor de todos sin caos ni cuelgues.
+- [ ] El programa termina solo (todos los hilos acaban y `main` sale) sin quedar colgado.
 
 ---
 
@@ -831,6 +1080,26 @@ Terminar cuando: alguien se agota **o** todos compilan ≥ `number_of_compiles_r
 
 `norminette coders/` hasta **0 errores**. Ojo: también cuentan los archivos/funciones extra.
 
+### Reglas que causaron errores reales en M2 (apúntalas)
+
+- **Espacios alrededor de los operadores**: `sizeof(t_dongle) * n`, nunca `sizeof(t_dongle)*n`.
+- **Alineación de prototipos en headers**: todos los nombres de función deben caer en la **misma
+  columna**. Como `int` (3 letras) y `void` (4) no miden lo mismo, necesitan distinto número de
+  tabs: `int` + **2 tabs**, `void` + **1 tab**.
+
+```c
+int		init(t_sim *sim);        /* int  + 2 tabs  */
+void	cleanup(t_sim *sim);     /* void + 1 tab   */
+```
+
+- **Declaraciones al principio** del bloque: `t_sim sim;` va justo tras `{`, no después de un `if`.
+- **5 funciones por archivo, 25 líneas por función**: si `init` se pasa, parte en helpers
+  (`init_dongles`, `init_coders`); si el archivo llega a 5, crea uno nuevo (`coder.c`, `log.c`...).
+- **Archivos de prueba**: cualquier `.c` suelto en `coders/` cuenta para la Norm. Los experimentos
+  (como un `testpthread.c`) van fuera o se borran antes del checkpoint.
+- **Las extensiones "42 formatter" de VS Code no son el norminette**: pueden formatearte el código
+  con reglas distintas (quitando espacios que la Norm exige). El juez es la CLI: `norminette coders/`.
+
 - [ ] Norminette limpio en todo `coders/`.
 
 ---
@@ -901,6 +1170,35 @@ Prepárate para explicar **por qué**, no solo **qué**:
 ---
 
 # ANEXO
+
+## Anexo Rápido: tabla de diagnóstico (síntoma → causa)
+
+> Añadida tras M2. Guárdala: cuando algo falle, busca el síntoma y casi seguro está aquí.
+
+| Síntoma | Causa probable | Lección |
+|---|---|---|
+| `error: expected expression before '...'` | código a medio escribir (el `...` no es C) | 0 |
+| `unused parameter` con `-Werror` | la función aún no usa su argumento | — |
+| El programa compila pero no hace nada visible | falta una llamada en `main` (código "huérfano") | 1.2 |
+| `return` con valor en `void` / viceversa | la firma no cuadra con el header | 14 |
+| `passing argument ... from incompatible pointer type` | le pasas un `t_coder *` donde espera un `pthread_mutex_t *` | 14 |
+| Valgrind: "definitely lost" | un `malloc` sin `free` (¿dentro de un bucle?) | 6.5.2 |
+| Valgrind: "Invalid read/write" | acceso a índice fuera de rango o a memoria ya liberada | 6.5.3, 6.5.7 |
+| Segfault al recorrer el bucle de `cleanup` | `= NULL` **dentro** del bucle | 6.5.7 |
+| Programa colgado sin mensaje | falta un `unlock`, o deadlock (Coffman), o `join` faltante | 1.3, 4 |
+| El hilo nunca imprime nada | `main` hizo `return` sin `join` (el SO mata los hilos) | 1.3 |
+| Primer elemento del array con basura | bucle con `i = 1` en vez de `i = 0` | 6.5.3 |
+| ids desplazados en el log (empiezan en 2) | `i = 1` por querer que el id empiece en 1 | 6.5.4 |
+| `if (comprobar_algo)` no detecta errores nunca | falta los paréntesis: `if (comprobar_algo())` | 6.5.6 |
+| Un `x == NULL` "no asigna nada" | `==` compara; `=` asigna | 6.5.6 |
+| `n = 1` funciona pero `n = 4` revienta (o al revés) | caso límite no trazado a mano | 6.5 |
+| Un solo coder avanza y el resto espera | mutex global en vez de uno por recurso | 2.2 |
+| Dos mensajes del log en la misma línea | falta el mutex de log | 9 |
+
+**Regla de oro del debugging en concurrencia:** traza el bucle **a mano** con `n = 1`, `n = 2` y
+`n = 4` antes de ejecutar. Casi todos los bugs de M2 se veían en la primera vuelta del papel.
+Y recuerda: la concurrencia castiga 1 de cada 10.000 ejecuciones — si "a veces falla", es una
+carrera, no un error de sintaxis.
 
 ## Glosario
 
