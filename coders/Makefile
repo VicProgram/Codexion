@@ -28,10 +28,10 @@ $(NAME): $(OBJ) $(HEADERS)
 	$(CC) $(CFLAGS) $(OBJ) -o $(NAME)
 
 clean:
-	$(RM) $(OBJ)
+	$(RM) $(OBJ) 
 
 fclean: clean
-	$(RM) $(NAME)
+	$(RM) $(NAME) *.out
 
 re: fclean all
 

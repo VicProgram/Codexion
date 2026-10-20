@@ -9,6 +9,7 @@ es.subject.pdf:Zone.Identifier
 .opencode
 .vscode
 
+*.o
 
 requisitos
 
