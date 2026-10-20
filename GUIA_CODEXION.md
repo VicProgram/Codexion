@@ -13,7 +13,7 @@
 
 ---
 
-## ⭐ DÓNDE ESTAMOS AHORA (actualizado 2026-10-19)
+## ⭐ DÓNDE ESTAMOS AHORA (actualizado 2026-10-20)
 
 > **Esta es la sección que te dice qué hacer a continuación. Empieza siempre por aquí.**
 
@@ -22,8 +22,8 @@
 | — | Estructura de carpetas + Makefile + header | ✅ **Hecho** | nada |
 | M0 | Compila, norminette y sin relink | ✅ **Hecho** | nada |
 | M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* no guarda los números todavía: eso llega en M2 |
-| M2 | Estado compartido e inicialización | 🔴 **SIGUIENTE** | pensar los structs, luego `init`/`cleanup` |
-| M3 | Hilos y ciclo del coder | ⬜ Pendiente | — |
+| M2 | Estado compartido e inicialización | ✅ **Hecho** | nada |
+| M3 | Hilos y ciclo del coder | 🔴 **SIGUIENTE** | crear `n` hilos + monitor (sin dongles aún) |
 | M4 | Adquirir/soltar dongles (mutex) | ⬜ Pendiente | — |
 | M5 | Cooldown | ⬜ Pendiente | — |
 | M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
@@ -34,8 +34,9 @@
 | V | Verificación (norma, leaks, tests, README) | ⬜ Pendiente | — |
 | D | Defensa (recode + preguntas) | ⬜ Pendiente | — |
 
-**En una frase:** el programa **compila, pasa la norma y rechaza argumentos inválidos**.
-Ahora mismo no hace nada más: arranca, valida y sale. El siguiente paso es **darle memoria** (M2).
+**En una frase:** el programa **compila, pasa la norma, reserva y libera todo el estado sin leaks**
+(dongles, coders, mutex) y rechaza argumentos inválidos. Aún no hace nada en tiempo real: no hay
+hilos todavía. El siguiente paso es **lanzar los hilos** (M3).
 
 ### Regla para avanzar
 
@@ -51,8 +52,8 @@ Ahora mismo no hace nada más: arranca, valida y sale. El siguiente paso es **da
 |---|---|
 | M0 | [Lección 17](#lección-17-m0--estructura-makefile-y-norm) |
 | M1 | [Lección 18](#lección-18-m1--parsing-y-validación) |
-| M2 | [Lección 19](#lección-19-m2--estado-compartido-e-inicialización) ← **estás aquí** |
-| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) |
+| M2 | [Lección 19](#lección-19-m2--estado-compartido-e-inicialización) |
+| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) ← **estás aquí** |
 | M4 | [Lección 21](#lección-21-m4--adquirirsoltar-dongles-mutex) |
 | M5 | [Lección 22](#lección-22-m5--cooldown) |
 | M6 | [Lección 23](#lección-23-m6--el-heap-y-la-planificación-fifo) |
@@ -93,8 +94,8 @@ Ahora mismo no hace nada más: arranca, valida y sale. El siguiente paso es **da
 **PARTE IV — Manos a la obra (por hitos)** · *(✅ = hecho, 🔴 = siguiente, ⬜ = pendiente)*
 - Lección 17: M0 — Estructura, Makefile y Norm · **✅**
 - Lección 18: M1 — Parsing y validación · **✅**
-- Lección 19: M2 — Estado compartido e inicialización · **🔴 SIGUIENTE**
-- Lección 20: M3 — Hilos y el ciclo del coder · ⬜
+- Lección 19: M2 — Estado compartido e inicialización · **✅**
+- Lección 20: M3 — Hilos y el ciclo del coder · **🔴 SIGUIENTE**
 - Lección 21: M4 — Adquirir/soltar dongles (mutex) · ⬜
 - Lección 22: M5 — Cooldown · ⬜
 - Lección 23: M6 — El heap y la planificación FIFO · ⬜
@@ -719,26 +720,28 @@ Lo que **queda fuera de M1** a propósito:
 
 ## LECCIÓN 19: M2 — Estado compartido e inicialización
 
-**Estado: 🔴 SIGUIENTE.**
+**Estado: ✅ HECHO.**
 
 Reserva el array de dongles y de coders, inicializa mutex y cond de cada dongle, crea el mutex del log.
 Define la convención izquierda/derecha.
 
-**Antes de escribir código**, haz las tres listas (no se inventan los structs, se deducen):
+Qué se consiguió (commits `f06142a`..`d1880cd`):
 
-1. `t_coder`: ¿qué necesita recordar cada persona? (ciclo, deadline, nº de compilaciones, sus dos dongles).
-2. `t_dongle`: ¿qué necesita saber cada dongle? (libre/ocupado, cooldown, quién lo tiene).
-3. `t_sim`: ¿qué es de todos a la vez? (parámetros, flag de parada, mutex de log, arrays).
+- `init.c` con `init_dongles`, `init_coders` (helpers `static`), `init` y `cleanup`.
+- `malloc` **una vez** por array, bucles `i = 0` rellenan cada elemento (id 1..n, `left = dongles[i]`,
+  `right = dongles[(i + 1) % n]` → el `%` da la vuelta a la mesa circular; con `n = 1`, left == right).
+- Mutex por dongle + `stop_mutex` + `log_mutex` creados en `init`, destruidos en `cleanup`
+  **antes** de los `free`, y `= NULL` al final.
+- `main` llama a `parse_args → init → cleanup`; valgrind: `All heap blocks were freed`.
+- Norminette OK en los 4 archivos. Herramientas instaladas en el equipo: `norminette` (uv) y `valgrind` (apt).
 
-Preguntas guía: ¿quién modifica cada campo? ¿qué mutex lo protege? ¿qué se destruye y en qué orden?
-
-- [ ] `init` crea todo y `cleanup` lo destruye simétricamente (pruébalo ya con valgrind).
+- [x] `init` crea todo y `cleanup` lo destruye simétricamente (valgrind limpio).
 
 ---
 
 ## LECCIÓN 20: M3 — Hilos y el ciclo del coder
 
-**Estado: ⬜ Pendiente.**
+**Estado: 🔴 SIGUIENTE.**
 
 Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles**, hace un ciclo simple
 imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
