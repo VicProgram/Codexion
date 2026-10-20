@@ -14,6 +14,7 @@ manteniendo siempre las **reglas del subject** (ver `../AGENTS.md`).
 
 | ID (carpeta) | Fuente (copia literal) | Licencia | Para qué sirve aquí |
 |---|---|---|---|
+| `tutor-c` | **Skill propia del proyecto** — creada el 2026-10-20 a partir de lo observado en las sesiones reales de M0–M2 (errores repetidos, estilo de dudas, qué explicaciones funcionaron) | propia | Calibrada al alumno real: perfil junior en C, orden de explicación (qué es → por qué → analogía → trampa → su turno), volumen corto, formato de revisión "síntoma → traza con `n=1`/`n=4` → causa → regla", lista de sus errores típicos. **Tiene prioridad** sobre las genéricas cuando varias encajen. |
 | `teaching-style` | Skill local ya existente en `~/.config/opencode/skills/teaching-style/SKILL.md` | propia del usuario | Estilo de enseñanza en español: paso a paso, preguntas guía, no dar el código, explicar el porqué. |
 | `socratic-tutor` | https://gist.github.com/Shunseii/8cd4ef40718a2f2966ca8f30fa17cad6 | gist público, sin licencia explícita | Modo tutor para escribir código: pistas en vez de respuestas, revisa tu código sin reescribirlo. |
 | `socrates` | https://github.com/bevibing/socrates-skill (`SKILL.md`) | MIT © 2026 RoundTable02 | Método socrático puro: nunca da la respuesta, te guía con preguntas. |
@@ -50,9 +51,14 @@ manteniendo siempre las **reglas del subject** (ver `../AGENTS.md`).
   Son inofensivos en OpenCode.
 - **`socratic-tutor`**: los ejemplos del texto original son de TypeScript/React; son ilustrativos,
   no instrucciones para este proyecto en C.
-- **Sin skills inventadas**: no existe skill pública descargable específica de Norminette/42 ni de
-  pthreads en C, así que **no se ha fabricado ninguna**. Las reglas del subject se han fijado en
+- **Sin skills inventadas de fuentes externas**: no existe skill pública descargable específica de Norminette/42 ni de
+  pthreads en C, así que **no se ha fabricado ninguna de fuera**. Las reglas del subject se han fijado en
   `AGENTS.md` (mecanismo oficial de instrucciones de OpenCode V2), no como skill.
+  **Excepción declarada: `tutor-c`**, que es una skill **propia** (no copiada de ningún repo),
+  escrita en este proyecto a partir del patrón de enseñanza observado en las sesiones reales.
+- **Prioridad entre skills de enseñanza**: `tutor-c` > `teaching-style` ≈ `socratic-tutor` > `socrates`.
+  Si se cargan varias, `tutor-c` manda por estar calibrada a este alumno y este repo; las otras
+  quedan como referencia de método (sócrates puro, espacio de lecciones de `teach`).
 
 ## Cómo se usan en OpenCode
 
