@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
-/*                                                       :::      ::::::::    */
-/*   codexion.h                                        :+:      :+:    :+:    */
-/*                                                   +:+ +:+         +:+      */
-/*   By: vabad-ro <vabad-ro@student.42madrid.com>  #+#  +:+       +#+         */
-/*                                               +#+#+#+#+#+   +#+            */
-/*   Created: 2026/10/16 13:52:54 by vabad-ro         #+#    #+#              */
-/*   Updated: 2026/10/20 19:14:01 by vabad-ro        ###   ########.fr        */
+/*                                                        :::      ::::::::   */
+/*   codexion.h                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
+/*   Updated: 2026/10/20 22:13:41 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 # define CODEXION_H
 
 # include <pthread.h>
+# include <unistd.h>
 # include <stdio.h>
 # include <stdlib.h>
 # include <string.h>
@@ -59,13 +60,14 @@ typedef struct s_coder
 	pthread_t	thread;
 }	t_coder;
 
-int	check_number(char **args);
-int	check_scheduler(char **args);
-int	check_range(t_sim *sim);
-int	parse_args(t_sim *sim, char **args);
-int	init(t_sim *sim);
+int		check_number(char **args);
+int		check_scheduler(char **args);
+int		check_range(t_sim *sim);
+int		parse_args(t_sim *sim, char **args);
+int		init(t_sim *sim);
 
 void	fill_sim(t_sim *sim, char **args);
 void	cleanup(t_sim *sim);
+void	*coder_loop(void *arg);
 
 #endif
