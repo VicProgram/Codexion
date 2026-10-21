@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/20 19:04:39 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 17:18:15 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/21 19:41:38 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,8 +23,10 @@ void	take_dongle(t_dongle *dongle)
 
 void	release_dongle(t_dongle *dongle)
 {
+	pthread_mutex_lock(&dongle->mutex);
+	dongle->is_free = 1;
 	pthread_cond_broadcast(&dongle->cond);
-
+	pthread_mutex_unlock(&dongle->mutex);
 }
 
 void	*coder_loop(void *arg)
