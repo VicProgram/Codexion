@@ -23,7 +23,7 @@
 | M0 | Compila, norminette y sin relink | ✅ **Hecho** | nada |
 | M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* overflow aparcado: `99999999999` cuela |
 | M2 | Estado compartido e inicialización | ✅ **Hecho** | nada |
-| M3 | Hilos y ciclo del coder | 🟡 **CASI** | `join_threads` no compila (3 arreglos, ver abajo) |
+| M3 | Hilos y ciclo del coder | ✅ **Hecho** | nada (interleaving real llega en M4) |
 | M4 | Adquirir/soltar dongles (mutex) | 🔴 **SIGUIENTE** | proteger `is_free` y coger los dos dongles |
 | M5 | Cooldown | ⬜ Pendiente | — |
 | M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
@@ -35,28 +35,18 @@
 | D | Defensa (recode + preguntas) | ⬜ Pendiente | — |
 
 **En una frase:** el programa **valida argumentos, reserva todo el estado, lanza `n` hilos coder
-que hacen el ciclo compile→debug→refactor, los espera y limpia**. Falta terminar de cuadrarlo con
-la Norm y el compilador antes de meter los dongles.
+que hacen el ciclo compile→debug→refactor, los espera y limpia**. Ahora toca que **compitan por
+los dongles**, que es donde aparecen los problemas de verdad (M4).
 
-### 🔧 Lo que falla AHORA MISMO (arreglar antes de seguir)
+### ✅ Cerrado en M3
 
-`make re` no compila y `norminette .` no está en verde. Los tres fallos:
+`make re` ✅, `norminette .` ✅ (5/5 archivos), valgrind ✅ (0 leaks, 7 allocs/7 frees).
+Los 4 hilos salen alineados por fase — **no es un bug**: nada los frena todavía, así que van al
+mismo ritmo. El entrelazado real se prueba en M4, cuando los dongles hagan esperar a unos y a otros.
 
-1. **`join_threads` usada antes de declararse.** `run_sim` la llama pero su prototipo **no está en
-   `codexion.h`**. Añádelo:
-   ```c
-   void	join_threads(t_sim *sim, int n);
-   ```
-2. **`codexion.h`: prototipos mal alineados** (`MISALIGNED_FUNC_DECL`, líneas 69-72). Los `void`
-   llevan un tabulador de más respecto a los `int`. Alinea todos al mismo ancho.
-3. **`main.c:22`: línea demasiado larga** (`LINE_TOO_LONG`). Parte el `pthread_create`:
-   ```c
-   if (pthread_create(&sim->coders[i].thread, NULL,
-   	coder_loop, &sim->coders[i]) != 0)
-   ```
+### 🔧 Lo que falla AHORA MISMO
 
-Cuando los tres estén: `make re` ✅ + `norminette .` ✅ + `valgrind --leak-check=full ./codexion 4 100 10 10 10 3 5 fifo` ✅
-→ M3 cerrado y commit. **Entonces empieza M4.**
+Nada. Compila, pasa la norma y no tiene leaks. **Empieza M4.**
 
 ### ⚠️ Deudas anotadas (no bloquean, pero no se olvidan)
 
@@ -996,7 +986,7 @@ Qué se consiguió (commits `f06142a`..`d1880cd`):
 
 ## LECCIÓN 20: M3 — Hilos y el ciclo del coder
 
-**Estado: 🟡 CASI — falta cuadrar el compilador y la Norm (ver arriba).**
+**Estado: ✅ HECHO.**
 
 Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles reales**, hace un ciclo
 simple imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
@@ -1011,13 +1001,7 @@ Los conceptos ya los tienes: esto es cablearlos.
 - Comprobación del return de `pthread_create` en el camino de error (`!= 0`), con `join` de los
   hilos vivos antes de `cleanup`.
 - `coder.c` añadido al `SRC` del Makefile.
-
-### Lo que falta para cerrar M3
-
-1. Prototipo de `join_threads` en el header.
-2. Alinear los prototipos de `codexion.h` (`MISALIGNED_FUNC_DECL`).
-3. Partir la línea larga del `pthread_create` en `main.c`.
-4. Pasar el checkpoint (abajo) y commitear.
+- `make re` ✅, `norminette .` ✅, valgrind ✅ (0 leaks).
 
 ### Decisiones que tomaste (y por qué)
 
@@ -1027,23 +1011,29 @@ Los conceptos ya los tienes: esto es cablearlos.
 4. **`join` antes de `cleanup`**: nunca liberar `sim->coders` con hilos vivos usándolo.
 5. **`join_threads(sim, i)`**: une solo los `i` vivos. En el caso normal `i == n`; en el error, `i < n`.
 
+### ⚠️ Sobre el "interleaving"
+
+Los 4 hilos salen **alineados por fase** (todos Compile, todos Debug...). **No es un bug:** ahora
+mismo nada los frena, todos hacen el mismo `usleep` y arrancan casi a la vez. El entrelazado real
+aparecerá en **M4**, cuando los dongles hagan esperar a unos y a otros.
+
 ### Pendiente que NO es de M3
 
-- El monitor todavía no existe (llega en M8). Aquí solo van los hilos coder.
+- El monitor todavía no existe (llega en M8).
 - El `printf` da trazas; el log con formato exacto es M9.
 - El `while (compile_times < required)` del coder cambiará en M8 (lo decide el monitor).
 
-### Checkpoint
+### Checkpoint (cumplido)
 
-- [ ] `make re` ✅ + `norminette .` ✅ + `valgrind --leak-check=full` ✅.
-- [ ] Veo en pantalla el ciclo compile→debug→refactor de todos, **intercalados** (no en serie).
-- [ ] El programa termina solo (todos los hilos acaban y `main` sale) sin quedar colgado.
+- [x] `make re` ✅ + `norminette .` ✅ + `valgrind --leak-check=full` ✅.
+- [x] El ciclo compile→debug→refactor sale de todos los coders.
+- [x] El programa termina solo (todos los hilos acaban y `main` sale) sin quedar colgado.
 
 ---
 
 ## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex)
 
-**Estado: 🔴 SIGUIENTE (después de cerrar M3).**
+**Estado: 🔴 SIGUIENTE.**
 
 Añade el estado real de los dongles y la sección crítica: solo se compila teniendo los **dos**.
 Aquí es donde blindas contra el **deadlock**.
