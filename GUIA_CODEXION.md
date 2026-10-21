@@ -24,8 +24,8 @@
 | M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* overflow aparcado: `99999999999` cuela |
 | M2 | Estado compartido e inicialización | ✅ **Hecho** | nada |
 | M3 | Hilos y ciclo del coder | ✅ **Hecho** | nada (interleaving real llega en M4) |
-| M4 | Adquirir/soltar dongles (mutex + cond) | 🔴 **EMPEZADO — NO COMPILA** | 2 errores de compilación + `take_dongle`/`release_dongle` por escribir |
-| M5 | Cooldown | ⬜ Pendiente | — |
+| M4 | Adquirir/soltar dongles (mutex + cond) | ✅ **Hecho** | nada (`take`/`release` con mutex + cond) |
+| M5 | Cooldown | 🔴 **SIGUIENTE** | `cond_timedwait` hasta `cooldown_until` |
 | M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
 | M7 | Planificación EDF | ⬜ Pendiente | — |
 | M8 | Monitor y detección de burnout | ⬜ Pendiente | — |
@@ -34,46 +34,38 @@
 | V | Verificación (norma, leaks, tests, README) | ⬜ Pendiente | — |
 | D | Defensa (recode + preguntas) | ⬜ Pendiente | — |
 
-**En una frase:** el programa **valida argumentos, reserva todo el estado, lanza `n` hilos coder
-que hacen el ciclo compile→debug→refactor, los espera y limpia**. Ahora toca que **compitan por
-los dongles**, que es donde aparecen los problemas de verdad (M4).
+**En una frase:** el programa **valida argumentos, reserva todo el estado, lanza `n` hilos coder que
+hacen el ciclo compile→debug→refactor compitiendo por los dongles, los espera y limpia**. Los hilos
+ya **se pelean de verdad** por los dongles y se ve entrelazado. Ahora toca el **cooldown** (M5).
 
-### ✅ Cerrado en M3
+### ✅ Cerrado en M4
 
-`make re` ✅, `norminette .` ✅ (5/5 archivos), valgrind ✅ (0 leaks, 7 allocs/7 frees).
-Los 4 hilos salen alineados por fase — **no es un bug**: nada los frena todavía, así que van al
-mismo ritmo. El entrelazado real se prueba en M4, cuando los dongles hagan esperar a unos y a otros.
+- **`take_dongle(t_dongle *d)`** → `lock` → `while (!is_free) cond_wait` → `is_free = 0` → `unlock`.
+- **`release_dongle(t_dongle *d)`** → `lock` → `is_free = 1` → `broadcast` → `unlock`.
+- `pthread_cond_t cond` añadido a `t_dongle`, `cond_init` en `init_dongles`, `cond_destroy` en `cleanup`.
+- `coder_loop`: `take(left)` → `take(right)` → compile → `release` de los dos → debug → refactor.
+- `make re` ✅, valgrind ✅ (0 leaks), y **salida entrelazada**: con 2 coders ya se mezclan
+  `Compile`/`Debug`/`Refactor`, prueba de que compiten por el dongle compartido.
+- Prueba de estrés `./codexion 5 500 20 20 20 5 0 fifo` ✅ — sin deadlock.
 
-### 🔧 Lo que falla AHORA MISMO
+### ⚠️ Dos correcciones que costaron (para no repetirlas)
 
-**El proyecto NO compila.** M4 está empezado a medias: añadiste `pthread_cond_t cond` a
-`t_dongle`, abriste `take_dongle`/`release_dongle` en `coder.c` y empezaste a tocar `init.c`,
-pero quedaron tres cosas sin cerrar.
+| Error | Por qué es error |
+|---|---|
+| `pthread_mutex_lock(&dongle->is_free)` | `is_free` es un `int`, el candado es `dongle->mutex`. Se bloquea **el mutex**, no el dato |
+| `pthread_cond_destroy(&sim->dongles->cond)` | `dongles->cond` es siempre `dongles[0].cond`. Dentro de un bucle con `i`, va `&sim->dongles[i].cond` |
 
-Esto es literalmente lo que dice el compilador ahora mismo:
+### ✅ Resuelto: el "deadlock" que se intuía en `take_dongle`
 
-```
-init.c:26:21: error: too few arguments to function call, expected 2, have 0
-                pthread_cond_init();
-init.c:82:29: error: expected identifier
-        pthread_cond_destroy(&sim->);
-```
+No existe. El mutex serializa el par *mirar `is_free` + marcarlo*, así que **dos coders no pueden
+coger el mismo dongle**. El deadlock real habría estado en el **orden** de coger los dos: por eso
+**siempre izquierda → derecha**.
 
-| # | Dónde | Qué pasa | Lo que debería ser |
-|---|---|---|---|
-| 1 | `init.c:26` | `pthread_cond_init()` sin argumentos: hay que decir **qué** condición se inicializa | `pthread_cond_init(&sim->dongles[i].cond, NULL);` — dentro del bucle, con `&` porque `cond` es un **objeto**, no un puntero |
-| 2 | `init.c:82` | `pthread_cond_destroy(&sim->)` apunta a la nada: en `t_sim` **no hay** `cond`, está dentro de cada `t_dongle` | `pthread_cond_destroy(&sim->dongles[i].cond);` — **dentro del bucle** de los dongles, justo al lado del `pthread_mutex_destroy` |
-| 3 | `coder.c:15` | `take_dongle(t_sim sim, t_coder coder)`: pasa structs **por valor** y el 2º parámetro es el coder, cuando la función necesita **el dongle** | `take_dongle(t_sim *sim, t_dongle *dongle)` (y `release_dongle` lo mismo). Ver «Mapa de variables» |
+### ⚠️ Deuda latente que sigue pendiente
 
-Y un cuarto, **latente**: todavía no ha petado porque el camino de error no se ha ejecutado.
-
-| # | Dónde | Qué pasa | Lo que debería ser |
-|---|---|---|---|
-| 4 | `main.c:41` y `main.c:58` | **Doble `cleanup`**: si un `pthread_create` falla, `run_sim` llama a `cleanup(sim)` y luego `main` vuelve a llamar a `cleanup(&sim)`. Como `cleanup` pone `dongles = NULL`, la segunda vez hace `pthread_mutex_destroy(&sim->dongles[i]...)` sobre `NULL` → **segfault** | que `cleanup` se llame **una sola vez**: desde `main` siempre, y `run_sim` solo avisa del fallo (por ejemplo devolviendo `int`) |
-
-> **Regla del día:** el primer objetivo es que `make re` vuelva a estar verde. No escribas
-> una línea nueva hasta que los errores estén arreglados. Arreglar errores de compilación
-> **es** el trabajo del hito, no una pausa del trabajo.
+| Deuda | Dónde | Cuándo |
+|---|---|---|
+| **Doble `cleanup`**: si un `pthread_create` falla, `run_sim` limpia y `main` vuelve a limpiar → `cleanup` sobre `NULL` → segfault | `main.c` `run_sim` + `main` | cuando se toque `run_sim` (M10) |
 
 ### ⚠️ Deudas anotadas (no bloquean, pero no se olvidan)
 
@@ -83,7 +75,6 @@ Y un cuarto, **latente**: todavía no ha petado porque el camino de error no se 
 | `printf` sin formato del subject en `coder.c` | `coder.c` | **M9** (log serializado) |
 | `while (compile_times < required)` en el coder | `coder.c` | **M8** (lo decide el monitor, no el coder) |
 | `init` llama a `cleanup` con mutexes no inicializados si falla un `malloc` | `init.c` | cuando se toque `init` de nuevo |
-| **Doble `cleanup`** (segfault latente, aún sin ejecutar) | `main.c` `run_sim` + `main` | **M4** — hoy mismo |
 | No se comprueba el retorno de `pthread_create` en producción | `main.c` | ya hecho en el camino de error ✅ |
 
 ### Regla para avanzar
@@ -1075,18 +1066,48 @@ aparecerá en **M4**, cuando los dongles hagan esperar a unos y a otros.
 
 ## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex + condition variable)
 
-**Estado: 🔴 EN CURSO — el código NO compila. Arréglalo antes de seguir.**
+**Estado: ✅ HECHO.**
 
 Añade el estado real de los dongles y la sección crítica: solo se compila teniendo los **dos**.
 Aquí es donde blindas contra el **deadlock**.
 
-> **Orden de trabajo de esta lección**
-> 1. Arreglar los errores de compilación de `init.c` (están arriba, en «Lo que falla AHORA MISMO»).
-> 2. Cambiar la firma de `take_dongle` / `release_dongle` (hoy pasan structs **por valor**).
-> 3. Leer el **mapa de variables** de abajo hasta que puedas decir qué es cada una **de memoria**.
-> 4. Escribir `take_dongle` y `release_dongle`.
-> 5. Llamarlas desde `coder_loop` con el orden de adquisición **correcto** (⚠️ no es el que crees).
-> 6. Checkpoint.
+### ✅ Resultado final (lo que quedó)
+
+```c
+void	take_dongle(t_dongle *dongle)
+{
+	pthread_mutex_lock(&dongle->mutex);
+	while (dongle->is_free == 0)
+		pthread_cond_wait(&dongle->cond, &dongle->mutex);
+	dongle->is_free = 0;
+	pthread_mutex_unlock(&dongle->mutex);
+}
+
+void	release_dongle(t_dongle *dongle)
+{
+	pthread_mutex_lock(&dongle->mutex);
+	dongle->is_free = 1;
+	pthread_cond_broadcast(&dongle->cond);
+	pthread_mutex_unlock(&dongle->mutex);
+}
+```
+
+`coder_loop`: `take(left)` → `take(right)` → compile → `release(left)` → `release(right)` →
+debug → refactor. Pruebas: 2 coders **entrelazados**, `5 coders` sin deadlock, valgrind 0 leaks.
+
+### ⚠️ Dos correcciones que costaron (para no repetirlas)
+
+| Error | Por qué es error |
+|---|---|
+| `pthread_mutex_lock(&dongle->is_free)` | `is_free` es un `int`; **el candado es `dongle->mutex`**. Se bloquea el mutex, no el dato |
+| `pthread_cond_destroy(&sim->dongles->cond)` | `dongles->cond` es siempre `dongles[0].cond`. En bucle con `i`: `&sim->dongles[i].cond` |
+
+### ✅ El "deadlock" de `take_dongle` (descartado)
+
+No existe: el mutex serializa *mirar `is_free` + marcarlo*, así que **dos coders no pueden coger el
+mismo dongle**. Y `cond_wait` **suelta el mutex mientras duerme** (si no, el que libera no podría
+hacer `broadcast`). El deadlock real era el del **orden** de adquisición (siguiente punto).
+
 
 ### Punto de partida (lo que YA existe, no hay que crearlo)
 
