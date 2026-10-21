@@ -13,7 +13,7 @@
 
 ---
 
-## ⭐ DÓNDE ESTAMOS AHORA (actualizado 2026-10-20)
+## ⭐ DÓNDE ESTAMOS AHORA (actualizado 2026-10-21)
 
 > **Esta es la sección que te dice qué hacer a continuación. Empieza siempre por aquí.**
 
@@ -21,10 +21,10 @@
 |---|---|---|---|
 | — | Estructura de carpetas + Makefile + header | ✅ **Hecho** | nada |
 | M0 | Compila, norminette y sin relink | ✅ **Hecho** | nada |
-| M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* no guarda los números todavía: eso llega en M2 |
+| M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* overflow aparcado: `99999999999` cuela |
 | M2 | Estado compartido e inicialización | ✅ **Hecho** | nada |
-| M3 | Hilos y ciclo del coder | 🔴 **SIGUIENTE** | crear `n` hilos + monitor (sin dongles aún) |
-| M4 | Adquirir/soltar dongles (mutex) | ⬜ Pendiente | — |
+| M3 | Hilos y ciclo del coder | 🟡 **CASI** | `join_threads` no compila (3 arreglos, ver abajo) |
+| M4 | Adquirir/soltar dongles (mutex) | 🔴 **SIGUIENTE** | proteger `is_free` y coger los dos dongles |
 | M5 | Cooldown | ⬜ Pendiente | — |
 | M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
 | M7 | Planificación EDF | ⬜ Pendiente | — |
@@ -34,9 +34,39 @@
 | V | Verificación (norma, leaks, tests, README) | ⬜ Pendiente | — |
 | D | Defensa (recode + preguntas) | ⬜ Pendiente | — |
 
-**En una frase:** el programa **compila, pasa la norma, reserva y libera todo el estado sin leaks**
-(dongles, coders, mutex) y rechaza argumentos inválidos. Aún no hace nada en tiempo real: no hay
-hilos todavía. El siguiente paso es **lanzar los hilos** (M3).
+**En una frase:** el programa **valida argumentos, reserva todo el estado, lanza `n` hilos coder
+que hacen el ciclo compile→debug→refactor, los espera y limpia**. Falta terminar de cuadrarlo con
+la Norm y el compilador antes de meter los dongles.
+
+### 🔧 Lo que falla AHORA MISMO (arreglar antes de seguir)
+
+`make re` no compila y `norminette .` no está en verde. Los tres fallos:
+
+1. **`join_threads` usada antes de declararse.** `run_sim` la llama pero su prototipo **no está en
+   `codexion.h`**. Añádelo:
+   ```c
+   void	join_threads(t_sim *sim, int n);
+   ```
+2. **`codexion.h`: prototipos mal alineados** (`MISALIGNED_FUNC_DECL`, líneas 69-72). Los `void`
+   llevan un tabulador de más respecto a los `int`. Alinea todos al mismo ancho.
+3. **`main.c:22`: línea demasiado larga** (`LINE_TOO_LONG`). Parte el `pthread_create`:
+   ```c
+   if (pthread_create(&sim->coders[i].thread, NULL,
+   	coder_loop, &sim->coders[i]) != 0)
+   ```
+
+Cuando los tres estén: `make re` ✅ + `norminette .` ✅ + `valgrind --leak-check=full ./codexion 4 100 10 10 10 3 5 fifo` ✅
+→ M3 cerrado y commit. **Entonces empieza M4.**
+
+### ⚠️ Deudas anotadas (no bloquean, pero no se olvidan)
+
+| Deuda | Dónde | Cuándo se ataca |
+|---|---|---|
+| Overflow en el parseo (`99999999999` cuela) | `parser.c` `check_range` | al final, si sobra tiempo (`safe_atoi`) |
+| `printf` sin formato del subject en `coder.c` | `coder.c` | **M9** (log serializado) |
+| `while (compile_times < required)` en el coder | `coder.c` | **M8** (lo decide el monitor, no el coder) |
+| `init` llama a `cleanup` con mutexes no inicializados si falla un `malloc` | `init.c` | cuando se toque `init` de nuevo |
+| No se comprueba el retorno de `pthread_create` en producción | `main.c` | ya hecho en el camino de error ✅ |
 
 ### Regla para avanzar
 
@@ -53,7 +83,7 @@ hilos todavía. El siguiente paso es **lanzar los hilos** (M3).
 | M0 | [Lección 17](#lección-17-m0--estructura-makefile-y-norm) |
 | M1 | [Lección 18](#lección-18-m1--parsing-y-validación) |
 | M2 | [Lección 19](#lección-19-m2--estado-compartido-e-inicialización) |
-| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) ← **estás aquí** |
+| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) ← **estás aquí (casi)** |
 | M4 | [Lección 21](#lección-21-m4--adquirirsoltar-dongles-mutex) |
 | M5 | [Lección 22](#lección-22-m5--cooldown) |
 | M6 | [Lección 23](#lección-23-m6--el-heap-y-la-planificación-fifo) |
@@ -966,7 +996,7 @@ Qué se consiguió (commits `f06142a`..`d1880cd`):
 
 ## LECCIÓN 20: M3 — Hilos y el ciclo del coder
 
-**Estado: 🔴 SIGUIENTE.**
+**Estado: 🟡 CASI — falta cuadrar el compilador y la Norm (ver arriba).**
 
 Crea `n` hilos coder + 1 monitor. Cada coder, por ahora **sin dongles reales**, hace un ciclo
 simple imprimiendo estados (con `usleep`), para verificar que arrancan y terminan bien.
@@ -974,34 +1004,46 @@ simple imprimiendo estados (con `usleep`), para verificar que arrancan y termina
 **Lectura previa obligatoria:** Lección 1.2 y 1.3 (crear, esperar y por qué `join`).
 Los conceptos ya los tienes: esto es cablearlos.
 
-### Decisiones que vas a tomar
+### Lo que ya está hecho
 
-1. **La función del hilo** firma `void *coder_loop(void *arg)`. El argumento que le pasas a
-   `pthread_create` es `&sim->coders[i]` (o `sim`, tu elección); dentro casteas y ya tienes todo.
-2. **Dónde crear el hilo**: un bucle en `main` (o en una `start_threads`). `pthread_t` ya lo tienes
-   en `t_coder.thread` — guárdalo ahí, no en variables sueltas.
-3. **Comprobar el return de `pthread_create`** (0 = bien). Si falla en el hilo nº 3, los hilos
-   1 y 2 **ya existen**: tienes que hacer `join` de los que se crearon antes de salir.
-4. **`join` antes de `cleanup`**: patrón del proyecto — crear todos → join de todos → cleanup.
-   Sin join, el proceso mata los hilos a mitad de nada (Lección 1.3).
-5. **Nuevo archivo `coder.c`** (añádelo al `SRC` del Makefile). `init.c` ya tiene 4 funciones y
-   el máximo son 5.
+- `coder.c` con `coder_loop`: bucle compile→debug→refactor con `usleep`.
+- `run_sim` en `main.c`: crea `n` hilos en un bucle, `join_threads` los espera.
+- Comprobación del return de `pthread_create` en el camino de error (`!= 0`), con `join` de los
+  hilos vivos antes de `cleanup`.
+- `coder.c` añadido al `SRC` del Makefile.
 
-### Preguntas antes de escribir código
+### Lo que falta para cerrar M3
 
-1. ¿Cómo sabe cada coder cuándo parar? Piensa en `sim->stop` + `stop_mutex`: ¿por qué un simple
-   `int` necesita mutex para ser leído desde otros hilos? (pista: Lección 2).
-2. Con `n = 5` y `usleep` dentro del ciclo, ¿por qué podrías ver los 5 mensajes **intercalados**
-   y no "1 termina, luego empieza el 2"? ¿Es eso un error?
+1. Prototipo de `join_threads` en el header.
+2. Alinear los prototipos de `codexion.h` (`MISALIGNED_FUNC_DECL`).
+3. Partir la línea larga del `pthread_create` en `main.c`.
+4. Pasar el checkpoint (abajo) y commitear.
 
-- [ ] Veo en pantalla el ciclo compile→debug→refactor de todos sin caos ni cuelgues.
+### Decisiones que tomaste (y por qué)
+
+1. **La función del hilo** es `void *coder_loop(void *arg)`, recibe `&sim->coders[i]`.
+2. **`pthread_create` devuelve 0 = bien.** El error es `!= 0` (ojo: al revés que tus `check_*`).
+3. **`break` antes de `i++`** en el bucle de creación: así `i` = número de hilos que SÍ existen.
+4. **`join` antes de `cleanup`**: nunca liberar `sim->coders` con hilos vivos usándolo.
+5. **`join_threads(sim, i)`**: une solo los `i` vivos. En el caso normal `i == n`; en el error, `i < n`.
+
+### Pendiente que NO es de M3
+
+- El monitor todavía no existe (llega en M8). Aquí solo van los hilos coder.
+- El `printf` da trazas; el log con formato exacto es M9.
+- El `while (compile_times < required)` del coder cambiará en M8 (lo decide el monitor).
+
+### Checkpoint
+
+- [ ] `make re` ✅ + `norminette .` ✅ + `valgrind --leak-check=full` ✅.
+- [ ] Veo en pantalla el ciclo compile→debug→refactor de todos, **intercalados** (no en serie).
 - [ ] El programa termina solo (todos los hilos acaban y `main` sale) sin quedar colgado.
 
 ---
 
 ## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex)
 
-**Estado: ⬜ Pendiente.**
+**Estado: 🔴 SIGUIENTE (después de cerrar M3).**
 
 Añade el estado real de los dongles y la sección crítica: solo se compila teniendo los **dos**.
 Aquí es donde blindas contra el **deadlock**.

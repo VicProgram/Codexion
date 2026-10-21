@@ -6,9 +6,10 @@ es.subject.pdf:Zone.Identifier
 *:Zone.Identifier
 
 .vscode
+.opencode
 
 *.o
-
+codexion
 requisitos
 
 subject.txt

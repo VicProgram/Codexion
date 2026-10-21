@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/20 22:13:41 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/21 15:50:17 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -66,8 +66,11 @@ int		check_range(t_sim *sim);
 int		parse_args(t_sim *sim, char **args);
 int		init(t_sim *sim);
 
+void	run_sim(t_sim *sim);
 void	fill_sim(t_sim *sim, char **args);
 void	cleanup(t_sim *sim);
 void	*coder_loop(void *arg);
+void	join_threads(t_sim *sim, int n);
+
 
 #endif
