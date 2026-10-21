@@ -24,7 +24,7 @@
 | M1 | Parsing y validación de argumentos | ✅ **Hecho** | *(opcional)* overflow aparcado: `99999999999` cuela |
 | M2 | Estado compartido e inicialización | ✅ **Hecho** | nada |
 | M3 | Hilos y ciclo del coder | ✅ **Hecho** | nada (interleaving real llega en M4) |
-| M4 | Adquirir/soltar dongles (mutex) | 🔴 **SIGUIENTE** | proteger `is_free` y coger los dos dongles |
+| M4 | Adquirir/soltar dongles (mutex + cond) | 🔴 **EMPEZADO — NO COMPILA** | 2 errores de compilación + `take_dongle`/`release_dongle` por escribir |
 | M5 | Cooldown | ⬜ Pendiente | — |
 | M6 | Heap y planificación FIFO | ⬜ Pendiente | — |
 | M7 | Planificación EDF | ⬜ Pendiente | — |
@@ -46,7 +46,34 @@ mismo ritmo. El entrelazado real se prueba en M4, cuando los dongles hagan esper
 
 ### 🔧 Lo que falla AHORA MISMO
 
-Nada. Compila, pasa la norma y no tiene leaks. **Empieza M4.**
+**El proyecto NO compila.** M4 está empezado a medias: añadiste `pthread_cond_t cond` a
+`t_dongle`, abriste `take_dongle`/`release_dongle` en `coder.c` y empezaste a tocar `init.c`,
+pero quedaron tres cosas sin cerrar.
+
+Esto es literalmente lo que dice el compilador ahora mismo:
+
+```
+init.c:26:21: error: too few arguments to function call, expected 2, have 0
+                pthread_cond_init();
+init.c:82:29: error: expected identifier
+        pthread_cond_destroy(&sim->);
+```
+
+| # | Dónde | Qué pasa | Lo que debería ser |
+|---|---|---|---|
+| 1 | `init.c:26` | `pthread_cond_init()` sin argumentos: hay que decir **qué** condición se inicializa | `pthread_cond_init(&sim->dongles[i].cond, NULL);` — dentro del bucle, con `&` porque `cond` es un **objeto**, no un puntero |
+| 2 | `init.c:82` | `pthread_cond_destroy(&sim->)` apunta a la nada: en `t_sim` **no hay** `cond`, está dentro de cada `t_dongle` | `pthread_cond_destroy(&sim->dongles[i].cond);` — **dentro del bucle** de los dongles, justo al lado del `pthread_mutex_destroy` |
+| 3 | `coder.c:15` | `take_dongle(t_sim sim, t_coder coder)`: pasa structs **por valor** y el 2º parámetro es el coder, cuando la función necesita **el dongle** | `take_dongle(t_sim *sim, t_dongle *dongle)` (y `release_dongle` lo mismo). Ver «Mapa de variables» |
+
+Y un cuarto, **latente**: todavía no ha petado porque el camino de error no se ha ejecutado.
+
+| # | Dónde | Qué pasa | Lo que debería ser |
+|---|---|---|---|
+| 4 | `main.c:41` y `main.c:58` | **Doble `cleanup`**: si un `pthread_create` falla, `run_sim` llama a `cleanup(sim)` y luego `main` vuelve a llamar a `cleanup(&sim)`. Como `cleanup` pone `dongles = NULL`, la segunda vez hace `pthread_mutex_destroy(&sim->dongles[i]...)` sobre `NULL` → **segfault** | que `cleanup` se llame **una sola vez**: desde `main` siempre, y `run_sim` solo avisa del fallo (por ejemplo devolviendo `int`) |
+
+> **Regla del día:** el primer objetivo es que `make re` vuelva a estar verde. No escribas
+> una línea nueva hasta que los errores estén arreglados. Arreglar errores de compilación
+> **es** el trabajo del hito, no una pausa del trabajo.
 
 ### ⚠️ Deudas anotadas (no bloquean, pero no se olvidan)
 
@@ -56,6 +83,7 @@ Nada. Compila, pasa la norma y no tiene leaks. **Empieza M4.**
 | `printf` sin formato del subject en `coder.c` | `coder.c` | **M9** (log serializado) |
 | `while (compile_times < required)` en el coder | `coder.c` | **M8** (lo decide el monitor, no el coder) |
 | `init` llama a `cleanup` con mutexes no inicializados si falla un `malloc` | `init.c` | cuando se toque `init` de nuevo |
+| **Doble `cleanup`** (segfault latente, aún sin ejecutar) | `main.c` `run_sim` + `main` | **M4** — hoy mismo |
 | No se comprueba el retorno de `pthread_create` en producción | `main.c` | ya hecho en el camino de error ✅ |
 
 ### Regla para avanzar
@@ -73,8 +101,8 @@ Nada. Compila, pasa la norma y no tiene leaks. **Empieza M4.**
 | M0 | [Lección 17](#lección-17-m0--estructura-makefile-y-norm) |
 | M1 | [Lección 18](#lección-18-m1--parsing-y-validación) |
 | M2 | [Lección 19](#lección-19-m2--estado-compartido-e-inicialización) |
-| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) ← **estás aquí (casi)** |
-| M4 | [Lección 21](#lección-21-m4--adquirirsoltar-dongles-mutex) |
+| M3 | [Lección 20](#lección-20-m3--hilos-y-el-ciclo-del-coder) |
+| M4 | [Lección 21](#lección-21-m4--adquirirsoltar-dongles-mutex--condition-variable) ← **estás aquí** |
 | M5 | [Lección 22](#lección-22-m5--cooldown) |
 | M6 | [Lección 23](#lección-23-m6--el-heap-y-la-planificación-fifo) |
 | M7 | [Lección 24](#lección-24-m7--planificación-edf) |
@@ -112,12 +140,12 @@ Nada. Compila, pasa la norma y no tiene leaks. **Empieza M4.**
 - Lección 15: El monitor como observador
 - Lección 16: Diseñar dos veces (módulos profundos)
 
-**PARTE IV — Manos a la obra (por hitos)** · *(✅ = hecho, 🔴 = siguiente, ⬜ = pendiente)*
+**PARTE IV — Manos a la obra (por hitos)** · *(✅ = hecho, 🔴 = en curso, ⬜ = pendiente)*
 - Lección 17: M0 — Estructura, Makefile y Norm · **✅**
 - Lección 18: M1 — Parsing y validación · **✅**
 - Lección 19: M2 — Estado compartido e inicialización · **✅**
-- Lección 20: M3 — Hilos y el ciclo del coder · **🔴 SIGUIENTE**
-- Lección 21: M4 — Adquirir/soltar dongles (mutex) · ⬜
+- Lección 20: M3 — Hilos y el ciclo del coder · **✅**
+- Lección 21: M4 — Adquirir/soltar dongles (mutex + cond) · 🔴 **EN CURSO**
 - Lección 22: M5 — Cooldown · ⬜
 - Lección 23: M6 — El heap y la planificación FIFO · ⬜
 - Lección 24: M7 — Planificación EDF · ⬜
@@ -544,6 +572,10 @@ Para dar la vuelta a la mesa circular se usa el **resto de la división** (`%`).
 
 Con `n = 1`: `(0 + 1) % 1 = 0` → `left == right == &dongles[0]`. Correcto según el subject.
 
+> ⚠️ **Pero ojo (lo verás en M4):** si `left == right`, hacer `take_dongle(left)` **y después**
+> `take_dongle(right)` es tomar **el mismo dongle dos veces** → el segundo `take_dongle` se queda
+> esperando al primero → **cuelgue eterno**. Con `n = 1` se coge **una sola vez**.
+
 ### 6.5.4. Índice ≠ id
 
 Dos números que se confunden fácilmente:
@@ -861,6 +893,16 @@ coders/
 - La Norm limita (nombre de funciones, una función por responsabilidad, etc.): consulta el PDF y pasa `norminette` a menudo, no al final.
 - Un solo sitio que crea/destruye cada recurso: si lo creas en `init.c`, destrúyelo en `cleanup.c`.
 
+> **Esto es un esquema sugerido, no tu árbol actual.** Hoy el repo es más pequeño:
+>
+> | Existe ya | Falta escribir |
+> |---|---|
+> | `main.c`, `parser.c` (aquí aparece como `parse.c`), `init.c`, `coder.c`, `sim.c`, `log.c` | `dongle.c`, `heap.c`, `monitor.c`, `time.c`, `cleanup.c` |
+>
+> Además, `cleanup()` vive de momento en `init.c:70`, no en un `cleanup.c` propio, y
+> `take_dongle()` / `release_dongle()` están en `coder.c`. No hace falta crear los
+> ficheros vacíos por adelantado: los abres cuando toque (M4, M6, M7).
+
 ### Checkpoint
 
 - [ ] Sé dibujar mis estructuras y qué campos lleva cada una, y quién los modifica.
@@ -1031,14 +1073,445 @@ aparecerá en **M4**, cuando los dongles hagan esperar a unos y a otros.
 
 ---
 
-## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex)
+## LECCIÓN 21: M4 — Adquirir/soltar dongles (mutex + condition variable)
 
-**Estado: 🔴 SIGUIENTE.**
+**Estado: 🔴 EN CURSO — el código NO compila. Arréglalo antes de seguir.**
 
 Añade el estado real de los dongles y la sección crítica: solo se compila teniendo los **dos**.
 Aquí es donde blindas contra el **deadlock**.
 
-- [ ] Dos coders no cogen nunca el mismo dongle a la vez, y con 2 coders **no se cuelga**.
+> **Orden de trabajo de esta lección**
+> 1. Arreglar los errores de compilación de `init.c` (están arriba, en «Lo que falla AHORA MISMO»).
+> 2. Cambiar la firma de `take_dongle` / `release_dongle` (hoy pasan structs **por valor**).
+> 3. Leer el **mapa de variables** de abajo hasta que puedas decir qué es cada una **de memoria**.
+> 4. Escribir `take_dongle` y `release_dongle`.
+> 5. Llamarlas desde `coder_loop` con el orden de adquisición **correcto** (⚠️ no es el que crees).
+> 6. Checkpoint.
+
+### Punto de partida (lo que YA existe, no hay que crearlo)
+
+| Ya existe | Dónde | Qué hace |
+|---|---|---|
+| `pthread_mutex_t mutex` dentro de `t_dongle` | `codexion.h` | **un mutex por dongle** (decisión tomada) |
+| `pthread_cond_t cond` dentro de `t_dongle` | `codexion.h` | añadido en M4 — **falta inicializarlo y destruirlo** |
+| `int is_free` | `t_dongle` | el estado del recurso (1 = libre) |
+| `long cooldown_until` | `t_dongle` | para M5, ya reservado |
+| `pthread_mutex_init` / `pthread_mutex_destroy` | `init.c` | creado en `init_dongles`, destruido en `cleanup` |
+| `t_dongle *left` / `t_dongle *right` | `t_coder` | ya cableados: `left = dongles[i]`, `right = dongles[(i+1) % n]` |
+
+**Lo que falta:** las funciones de coger/soltar y llamarlas desde `coder_loop`. Nada más.
+
+### 🗺️ MAPA DE VARIABLES DE M4 (léelo antes de escribir una línea)
+
+Que quede **clarísimo qué es cada cosa**. Todas estas variables aparecen en los ejemplos de abajo.
+
+#### La confusión de base: `t_dongle` vs `t_dongle *`
+
+| Se escribe | Qué es | Ejemplo |
+|---|---|---|
+| `t_dongle` | el **molde** (el tipo). Solo sirve para decir "de qué va el struct" | `malloc(sizeof(t_dongle) * n)` |
+| `t_dongle *` | un **puntero** a un dongle: una dirección. Con él llegas al dongle **real** | `t_dongle *dongle;` |
+| `t_dongle dongle` | una **copia** entera del struct, en la pila de la función | ⚠️ **esto es lo que tenías en `coder.c`** |
+
+> ⚠️ **Por qué la copia es un error grave.** Al pasar `t_dongle` por valor, C copia el struct
+> **entero** (mutex y cond incluidos) a la pila. Esa copia **no es** el dongle que ven los demás
+> hilos: hacer `dongle.is_free = 0` dentro de la función **no cambia nada en la mesa**. Y copiar un
+> `pthread_mutex_t` que está en uso es comportamiento indefinido.
+>
+> **Regla del proyecto:** todos los structs se pasan **por puntero**: `t_sim *`, `t_coder *`,
+> `t_dongle *`. Si ves `t_sim sim` o `t_dongle dongle` en una firma, es un error.
+
+#### La tabla grande
+
+| Variable | Tipo | Dónde vive | Qué significa | Quién la escribe | Quién la lee |
+|---|---|---|---|---|---|
+| `sim` | `t_sim *` | parámetro de `take_dongle`/`release_dongle`; dentro del coder es `c->sim` | puntero a **la mesa**: la simulación entera (argumentos, arrays, flags, mutex del log) | `init` | todos los hilos |
+| `c` | `t_coder *` | variable **local** de `coder_loop` | puntero a **"yo"**: esta persona concreta. Es el `arg` que le pasó `pthread_create` | `init_coders` | solo su hilo |
+| `c->sim` | `t_sim *` | campo de `t_coder` | atajo para llegar a la mesa sin pasarla como parámetro | `init_coders` | su hilo |
+| `c->left` | `t_dongle *` | campo de `t_coder` | **el dongle de mi izquierda** = `&dongles[i]` | `init_coders` | su hilo |
+| `c->right` | `t_dongle *` | campo de `t_coder` | **el dongle de mi derecha** = `&dongles[(i+1) % n]` | `init_coders` | su hilo |
+| `dongle` | `t_dongle *` | parámetro de `take_dongle`/`release_dongle` | puntero a **el dongle concreto** sobre el que trabajas ahora | — | quien llama |
+| `dongle->mutex` | `pthread_mutex_t` | dentro de `t_dongle` | **el candado de ese dongle**; protege `is_free` | `init_dongles` | quien lo usa |
+| `dongle->cond` | `pthread_cond_t` | dentro de `t_dongle` | **el timbre de ese dongle**; avisa a los que esperan | `init_dongles` | quien espera |
+| `dongle->is_free` | `int` | dentro de `t_dongle` | **el estado**: `1` = libre, `0` = alguien lo tiene | `take_dongle` (→0) y `release_dongle` (→1) | `take_dongle`, para decidir si espera |
+| `dongle->cooldown_until` | `long` | dentro de `t_dongle` | instante (ms) hasta el que el dongle está en cooldown. **M5**, todavía quieto | `release_dongle` (M5) | M5 |
+| `c->compile_times` | `int` | dentro de `t_coder` | nº de compilaciones que **yo** ya he hecho | mi propio hilo | mi hilo (+ monitor en M8) |
+| `c->last_compile` | `long` | dentro de `t_coder` | ms desde el inicio en los que **yo** empecé mi última compilación | mi propio hilo | monitor (M8) |
+| `sim->log_mutex` | `pthread_mutex_t` | dentro de `t_sim` | candado del **log** (M9) | `init` | todos (M9) |
+
+#### El dibujo de la mesa
+
+```
+sim  (t_sim *)  ─────────────────────────────►  la mesa: la comparten TODOS los hilos
+ │
+ ├── coders ──▶ [ coder 0 ][ coder 1 ][ coder 2 ]
+ │                │         │         │
+ │              c->left   c->left   c->left     (t_dongle *)
+ │              c->right  c->right  c->right
+ │               d0,d1    d1,d2    d2,d0
+ │
+ ├── dongles ─▶ [ dongle 0 ][ dongle 1 ][ dongle 2 ]   (t_dongle)
+ │                │  mutex   │  mutex   │  mutex      ← un candado POR dongle
+ │                │  cond    │  cond    │  cond       ← un timbre POR dongle
+ │                │  is_free │  is_free │  is_free    ← el estado que se protege
+ │
+ └── stop_mutex, log_mutex
+```
+
+#### Los tres `&` que hay que entender bien
+
+| Se escribe | Significado | Dónde se usa |
+|---|---|---|
+| `&dongle->mutex` | "la dirección del mutex que está **dentro** del dongle" | `pthread_mutex_lock(&dongle->mutex)` |
+| `&sim->dongles[i].cond` | "la dirección de la cond que está dentro del dongle nº `i`" | `pthread_cond_init(&sim->dongles[i].cond, NULL)` |
+| `&sim->coders[i].left` | "la dirección del **puntero** `left` que está dentro del coder nº `i`" | cuando le asignas el dongle |
+
+> **Regla:** el `&` va delante de una **variable** (un objeto). Nunca delante de algo que ya es una
+> dirección: `&dongle->mutex` sí (el mutex es un objeto), pero `&c->left` **tampoco** — `c->left`
+> ya es un puntero, y `&c->left` sería "la dirección del puntero", que es otra cosa distinta.
+
+### Decisión 1: un mutex por dongle (no uno global)
+
+El usuario lo razonó así: *"uno para cada dongle porque se liberan y se comprometen a tiempos
+distintos"*. Correcto. Con un solo mutex global, para mirar el dongle 3 bloqueas también el 0, el 1,
+el 2... todo el mundo en cola por cualquier dongle. Con uno por dongle, cada conflicto es local.
+
+### Decisión 2: condition variable, NO busy-wait
+
+El usuario eligió **condition variable** y dio el argumento exacto:
+
+- El **busy-wait** gasta CPU y el `usleep` que lo acompaña es impreciso: "puede pasarse o quedarse
+  corto". No es justo y no es fiable.
+- El **condition variable** duerme de verdad (0% CPU mientras espera) y despierta justo cuando
+  alguien avisa.
+
+Y un motivo extra que decidiste sin saberlo: **el cooldown (M5) también necesita espera.** Con `cond`
+esa espera encaja de forma natural (`pthread_cond_timedwait`); con busy-wait habría que rehacerlo.
+Elegir cond ahora ahorra trabajo en M5.
+
+**Las tres piezas y para qué sirve cada una** (esto es lo que no cuadraba en los ejemplos):
+
+```
+t_dongle / is_free      → el ESTADO del recurso   (¿lo tiene alguien?)
+pthread_mutex_t mutex   → PROTEGE ese estado      (que se mire de uno en uno)
+pthread_cond_t  cond    → CANAL de aviso          (para no preguntar en bucle)
+```
+
+La condición **no guarda nada**. Es solo el timbre: "quien espere aquí, que se despierte y **vuelva
+a mirar**". El estado sigue en `is_free`. Por eso la condición siempre va con el mutex: uno protege,
+el otro avisa.
+
+### El patrón obligatorio — y qué es cada línea
+
+Primero la versión abstracta (la idea):
+
+```
+lock(mutex)
+while (!puedo)              ← si esto no se cumple, vuelvo a esperar
+    cond_wait(cond, mutex)  ← suelta el mutex y duerme; al despertar lo recupera
+hago la acción              ← ya tengo el mutex Y la condición se cumple
+unlock(mutex)
+```
+
+Ahora la versión **con los nombres reales de tu proyecto** (esto es lo que te faltaba: saber qué es
+cada cosa):
+
+```c
+void	take_dongle(t_sim *sim, t_dongle *dongle)
+{
+	(void)sim;
+	pthread_mutex_lock(&dongle->mutex);
+	while (dongle->is_free == 0)
+		pthread_cond_wait(&dongle->cond, &dongle->mutex);
+	dongle->is_free = 0;
+	pthread_mutex_unlock(&dongle->mutex);
+}
+```
+
+| Línea | Qué hace | Por qué |
+|---|---|---|
+| `void take_dongle(t_sim *sim, t_dongle *dongle)` | declara la función | `sim` y `dongle` son **punteros**: así tocas el dongle de verdad, no una copia |
+| `(void)sim;` | "este parámetro no lo uso (todavía)" | con `-Werror`, un parámetro sin usar **rompe la compilación** |
+| `pthread_mutex_lock(&dongle->mutex);` | cojo el candado **de ese dongle** | `&` porque `mutex` es un objeto dentro del struct; y el candado es el del dongle, no uno global |
+| `while (dongle->is_free == 0)` | mientras esté ocupado, no puedo cogerlo | **`while`, no `if`**: al despertar puede que otro se lo haya llevado |
+| `pthread_cond_wait(&dongle->cond, &dongle->mutex);` | duerme hasta que le avisen | suelta el mutex mientras duerme y lo **vuelve a coger** al despertar |
+| `dongle->is_free = 0;` | **toma** el dongle | solo puede hacerse teniendo el mutex → nadie más puede hacerlo a la vez |
+| `pthread_mutex_unlock(&dongle->mutex);` | suelta el candado | **después** de tocar el estado, nunca antes |
+
+Y la pareja, la otra mitad de la sección crítica:
+
+```c
+void	release_dongle(t_sim *sim, t_dongle *dongle)
+{
+	(void)sim;
+	pthread_mutex_lock(&dongle->mutex);
+	dongle->is_free = 1;
+	pthread_cond_broadcast(&dongle->cond);
+	pthread_mutex_unlock(&dongle->mutex);
+}
+```
+
+| Línea | Qué hace | Por qué |
+|---|---|---|
+| `pthread_mutex_lock(&dongle->mutex);` | coge el candado | sin esto, `is_free = 1` y `broadcast` podrían pisarse con otro hilo |
+| `dongle->is_free = 1;` | devuelve el dongle a la mesa | el estado **cambia aquí**, protegido por el mutex |
+| `pthread_cond_broadcast(&dongle->cond);` | **toca el timbre**: "hay dongle libre, despierten los que esperan" | `broadcast` y no `signal`: pueden esperar varios en el mismo dongle, y con `signal` solo se despertaría uno (puede que no sea el que le toca) |
+| `pthread_mutex_unlock(&dongle->mutex);` | suelta el candado | |
+
+Y una tercera clave, la que se te va a colar: **el `broadcast` va ANTES del `unlock`.** Si avisas
+después de soltar el candado, otro hilo puede despertar, no encontrar el dongle libre y volver a
+dormirse **sin que nadie lo vuelva a avisar** → el timbre queda mudo.
+
+### 🔴 Decisión 3: el orden de adquisición (CORREGIDA — la anterior provocaba un cuelgue)
+
+> **Aviso.** La versión anterior de esta guía decía *"todos cogen primero el izquierdo, después el
+> derecho; así no hay ciclo"*. **Es falso**, y era la idea que tenías en la cabeza. Con `n = 4` eso
+> **cuelga el programa**. Aquí está la traza, paso a paso.
+
+#### La traza del deadlock (n = 4, los 4 arrancan a la vez)
+
+Convención del proyecto: el coder de índice `i` (0-based) coge `left = dongles[i]` y
+`right = dongles[(i+1) % 4]`.
+
+```
+Coder 0:  left = d0   right = d1
+Coder 1:  left = d1   right = d2
+Coder 2:  left = d2   right = d3
+Coder 3:  left = d3   right = d0      ← este es el que cierra el círculo
+```
+
+Si todos cogen primero el **izquierdo**, los 4 dongles se reparten sin conflicto (son distintos):
+
+```
+t0:  c0 toma d0    c1 toma d1    c2 toma d2    c3 toma d3
+t1:  c0 pide d1 → OCUPADO     c1 pide d2 → OCUPADO
+     c2 pide d3 → OCUPADO     c3 pide d0 → OCUPADO
+t2:  los 4 esperando. NINGUNO tiene sus dos dongles.
+     → nadie puede soltar nada. El programa se cuelga PARA SIEMPRE.
+```
+
+La espera es circular: `c0 → d1 → c1 → d2 → c2 → d3 → c3 → d0 → c0`.
+Se cumplen **las 4 condiciones de Coffman**:
+
+| Condición de Coffman | ¿Se cumple aquí? |
+|---|---|
+| Exclusión mutua | un dongle, un dueño ✔ |
+| Retención y espera | c0 **ya tiene** d0 y **espera** d1 ✔ |
+| Sin expropiación | a c0 no le quitan d0 ✔ |
+| **Espera circular** | d0 → d1 → d2 → d3 → d0 ✔ |
+
+#### ✅ La regla correcta: orden global por índice
+
+> **Cada coder coge sus dos dongles en orden CRECIENTE de índice: primero el de índice MENOR,
+> después el de índice MAYOR.**
+
+| Coder | sus dos dongles | orden correcto | ¿coincide con "izquierdo primero"? |
+|---|---|---|---|
+| 0 | d0, d1 | d0 → d1 | sí |
+| 1 | d1, d2 | d1 → d2 | sí |
+| 2 | d2, d3 | d2 → d3 | sí |
+| 3 (el último) | d3, d0 | **d0 → d3** | **NO** → coge primero su *derecho* |
+
+Es decir: **todos menos el último cogen el izquierdo primero; el último coge el derecho primero.**
+No es una chapuza: es **ordenar los recursos con un orden global** (aquí, el índice del dongle) y
+que cada hilo los coja **siempre** en ese orden. Eso **rompe la espera circular** por construcción.
+
+#### Traza con la regla correcta (n = 4)
+
+```
+t0:  c0 pide d0 → LIBRE → lo tiene      c3 pide d0 → OCUPADO (lo tiene c0) → espera
+t1:  c1 pide d1 → LIBRE → lo tiene      c0 pide d1 → OCUPADO (lo tiene c1) → espera
+t2:  c2 pide d2 → LIBRE → lo tiene      c1 pide d2 → OCUPADO (lo tiene c2) → espera
+t3:  c2 pide d3 → LIBRE → lo tiene → c2 ya tiene d2 y d3 → compila → suelta
+t4:  c1 pide d2 → ahora LIBRE → lo tiene → compila → suelta
+t5:  c0 pide d1 → ahora LIBRE → lo tiene → compila → suelta
+t6:  c3 pide d0 → ahora LIBRE → lo tiene → pide d3 → LIBRE → lo tiene → compila
+```
+
+✅ **Nadie espera en ciclo.** La cadena de esperas arranca en el que espera el índice más bajo
+(d0) y **termina** en el que puede completarse (d3).
+
+> **El invariante que hay que repetirse (y que va en el README):** con este orden, un hilo que
+> espera **siempre espera un índice MAYOR que todos los que ya tiene**. El que tiene el índice más
+> alto nunca está esperando nada → el último de la cadena siempre puede terminar, soltar, y desbloquear
+> a todos los demás. Por eso no puede haber ciclo **en ningún interlineado**, no solo en el de arriba.
+
+#### Cómo se implementa el "menor índice primero"
+
+Tus dos dongles son `c->left` y `c->right`, y **los dos son punteros dentro del MISMO array**
+(`sim->dongles`). En C, comparar dos punteros **del mismo array** con `<` o `>` **es comparar sus
+índices**: lo garantiza el estándar, siempre que no se comparen punteros de arrays distintos.
+
+```c
+t_dongle	*first;
+t_dongle	*second;
+
+first = c->left;
+second = c->right;
+if (first > second)
+{
+	first = c->right;
+	second = c->left;
+}
+take_dongle(c->sim, first);     /* el de índice MENOR: el primero que se coge */
+take_dongle(c->sim, second);    /* el de índice MAYOR: el segundo */
+```
+
+> ⚠️ **Trampa:** comparar punteros de **arrays distintos** no significa nada (el estándar no lo
+> define). Aquí es seguro **porque** `left` y `right` salen los dos de `sim->dongles`. Si algún día
+> cambiabas la disposición de la mesa, esta comparación dejaría de ser válida → la alternativa
+> blindada es guardar los **índices** en el `t_coder` en vez de los punteros.
+
+#### 🔴 El caso `n = 1`: `left` y `right` son EL MISMO dongle
+
+Con `n = 1`: `left = &dongles[0]` y `right = &dongles[(0 + 1) % 1] = &dongles[0]`.
+**Son el mismo dongle.** Si haces `take_dongle(left)` y después `take_dongle(right)`, el segundo
+`take_dongle` ve `is_free == 0` (lo acabas de tomar tú) y **se espera a sí mismo → cuelgue eterno**.
+
+```
+c0: take_dongle(d0) → is_free = 0, vale
+c0: take_dongle(d0) → is_free == 0 → espera… espera… (él mismo es el dueño; nadie va a soltarlo)
+    → CUEGUE
+```
+
+El subject dice que con una persona hay **un solo dongle** sobre la mesa → se coge **una vez**:
+
+```c
+take_dongle(c->sim, first);
+if (first != second)
+	take_dongle(c->sim, second);
+...
+release_dongle(c->sim, first);
+if (first != second)
+	release_dongle(c->sim, second);
+```
+
+> `first != second` compara **punteros**: si son el mismo dongle, dan la misma dirección → son
+> iguales. Funciona porque los dos punteros salen del mismo array. (Y si `n > 1`, `first` y `second`
+> son dongles distintos → la condición se cumple y coge los dos.)
+
+
+#### La otra opción (la necesitarás en M6): un árbitro central
+
+| | **Opción A — orden por índice** (la de arriba) | **Opción B — árbitro central** |
+|---|---|---|
+| Idea | cada coder coge sus dongles en un orden global fijo; si no puede, espera | un mutex + una cola en `t_sim`: el coder **pide el par** y el árbitro lo concede cuando puede |
+| Deadlock | imposible **por el orden global** | imposible porque **nadie coge medio par**: se conceden los 2 a la vez |
+| Coste ahora | nada: es ordenar dos punteros | un mutex nuevo, una cola de peticiones, la lógica de concesión |
+| ¿Sirve para FIFO/EDF (M6/M7)? | ❌ no: no hay ningún sitio donde decidir "quién va primero" | ✅ sí: la cola de peticiones **es** el sitio donde FIFO/EDF deciden |
+| Riesgo | el orden hay que respetarlo en **todas** las adquisiciones | más código de golpe |
+
+**Recomendación para M4:** Opción A (es lo mínimo que cumple el hito y te hace ver a Coffman en
+práctica). Si en M6 el heap te obliga a rehacer el reparto, ese es el precio de entender por qué
+existe un árbitro. La Opción B la escribirás igualmente en M6/M7.
+
+⚠️ Es fácil confundir esta pregunta con *"¿quién gana si dos quieren el mismo dongle?"*: eso es el
+scheduler (M6 FIFO / M7 EDF) y **no** se resuelve aquí.
+
+### Diseño: el `coder_loop` completo, línea por línea
+
+Prefiere **una función que coge un dongle y otra que lo suelta** — tonta cada una, una sola cosa.
+Y como la Norm limita cada función a **25 líneas**, el par de adquisiciones va en su propio helper:
+
+```c
+static void	acquire_dongles(t_coder *c)
+{
+	t_dongle	*first;
+	t_dongle	*second;
+
+	first = c->left;
+	second = c->right;
+	if (first > second)
+	{
+		first = c->right;
+		second = c->left;
+	}
+	take_dongle(c->sim, first);
+	if (first != second)
+		take_dongle(c->sim, second);
+}
+
+static void	release_dongles(t_coder *c)
+{
+	release_dongle(c->sim, c->left);
+	if (c->left != c->right)
+		release_dongle(c->sim, c->right);
+}
+
+void	*coder_loop(void *arg)
+{
+	t_coder	*c;
+
+	c = arg;
+	while (c->compile_times < c->sim->compiles_required)
+	{
+		acquire_dongles(c);
+		printf("Compile\n");
+		usleep(c->sim->comp_time * 1000);
+		release_dongles(c);
+		c->compile_times += 1;
+		printf("Debug\n");
+		usleep(c->sim->debug_time * 1000);
+		printf("Refactor\n");
+		usleep(c->sim->refactor_time * 1000);
+	}
+	return (NULL);
+}
+```
+
+| Pieza | Qué hace | Trampa que evita |
+|---|---|---|
+| `t_dongle *first; t_dongle *second;` | dos punteros **locales**, al principio del bloque | declararlos a mitad de bloque incumple la Norm; y sin declararlos **no compila** |
+| `if (first > second)` → reordenar | **orden global por índice** de Decisión 3 | "izquierdo primero" **cuelga con n ≥ 3** |
+| `if (first != second) take_dongle(second)` | solo coge el segundo si son **distintos** | con `n = 1` los dos son el mismo dongle → **se esperaría a sí mismo** |
+| `release_dongles(c)` justo tras el `usleep` de compilar | los suelta **antes** de depurar y refactorizar | tener dongles en debug/refactor hambrienta a los vecinos → burnout |
+| `c->compile_times += 1;` **después** de soltar | se cuenta al terminar, no al empezar | — |
+| `* 1000` en los `usleep` | los argumentos van en **ms** y `usleep` pide **µs** | compilaría 1000 veces más rápido de lo que dice el usuario |
+
+> **El orden en `coder_loop` importa:** `acquire` → compilar → `release` → contar → debug → refactor →
+> vuelta a empezar. `printf("Compile")` va **dentro** del par, porque el log del subject pide dos
+> `has taken a dongle` antes de `is compiling` (la traducción a ese formato es M9).
+>
+> **Por qué NO meter "¿cuántos tengo?" dentro de `take_dongle`:** mezclaría estado y condiciones donde
+> no tocan. `take_dongle` coge **uno** y punto. Coger dos es responsabilidad del coder (aquí, de
+> `acquire_dongles`).
+
+> 📐 **Orden de definición en `coder.c`** (los `static` se declaran antes de usarse):
+> `take_dongle` → `release_dongle` → `acquire_dongles` → `release_dongles` → `coder_loop`.
+> Así `coder.c` se queda en **exactamente 5 funciones**, el límite de la Norm.
+
+### Cambios en struct y ciclo de vida
+
+1. `t_dongle` → añadir `pthread_cond_t cond;` ✅ (ya está hecho).
+2. `init_dongles` → `pthread_cond_init(&sim->dongles[i].cond, NULL);` junto al `pthread_mutex_init`.
+3. `cleanup` → `pthread_cond_destroy(&sim->dongles[i].cond);` dentro del bucle, junto al `destroy`
+   del mutex.
+4. **Prototipos en `codexion.h`** para `take_dongle` y `release_dongle` (hoy no están: la Norm y
+   el compilador los exigen).
+
+```c
+void	take_dongle(t_sim *sim, t_dongle *dongle);
+void	release_dongle(t_sim *sim, t_dongle *dongle);
+```
+
+> **Alineación de prototipos:** `void` son 4 letras → **1 tab** (como `cleanup`, `join_threads`...).
+
+### Preguntas antes de escribir
+
+1. ¿Por qué `while` y no `if` alrededor de `cond_wait`?
+2. ¿Por qué `broadcast` y no `signal` cuando varios esperan el mismo dongle?
+3. ¿Qué condición de Coffman **rompe** el orden por índice, y por qué "izquierdo primero" no la
+   rompe?
+4. Con `n = 1`, ¿qué dos nombres son iguales y qué pasa si llamas dos veces a `take_dongle`?
+5. ¿Por qué el parámetro es `t_dongle *` y no `t_dongle`?
+
+### Checkpoint
+
+- [ ] `make re` vuelve a estar **verde** (los errores de `init.c` y de `coder.c` resueltos).
+- [ ] Dos coders no cogen nunca el mismo dongle a la vez, y con **2 coders no se cuelga**.
+- [ ] Con `n = 4` **no hay deadlock**: los 4 terminan. (Si cuelga, mira la traza de Decisión 3.)
+- [ ] Con `n = 1` termina (no se espera a sí mismo).
+- [ ] `norminette coders/` a 0 + `valgrind --leak-check=full` sin fugas.
 
 ---
 
@@ -1222,6 +1695,9 @@ Prepárate para explicar **por qué**, no solo **qué**:
 | Primer elemento del array con basura | bucle con `i = 1` en vez de `i = 0` | 6.5.3 |
 | ids desplazados en el log (empiezan en 2) | `i = 1` por querer que el id empiece en 1 | 6.5.4 |
 | `if (comprobar_algo)` no detecta errores nunca | falta los paréntesis: `if (comprobar_algo())` | 6.5.6 |
+| `too few arguments to function call, expected 2, have 0` | a un `mutex_init`/`cond_init` le faltan **qué** y los atributos | 21 |
+| `expected identifier` en `x->` | el nombre no existe en ese struct (te has dejado un trozo) | 21, 14 |
+| Compila, pero revienta cuando un `pthread_create` falla | doble `cleanup`: la segunda vez sobre `NULL` | 6.5.7 |
 | Un `x == NULL` "no asigna nada" | `==` compara; `=` asigna | 6.5.6 |
 | `n = 1` funciona pero `n = 4` revienta (o al revés) | caso límite no trazado a mano | 6.5 |
 | Un solo coder avanza y el resto espera | mutex global en vez de uno por recurso | 2.2 |
@@ -1283,6 +1759,19 @@ carrera, no un error de sintaxis.
 | Log serializado | `log.c` |
 | Sin leaks | `cleanup.c` + `valgrind` |
 | Sin globales / funciones autorizadas | todo el proyecto (`AGENTS.md`) |
+
+> **De qué ficheros habla esta tabla y cuáles existen ya:**
+>
+> | Fichero | ¿Existe? | Nota |
+> |---|---|---|
+> | `main.c`, `parser.c`, `init.c`, `sim.c`, `log.c` | ✅ | M1–M3 |
+> | `coder.c` | ✅ | ahora mismo contiene también `take_dongle()` / `release_dongle()` |
+> | `dongle.c` | ❌ | lo creas en M4 (puedes dejarlo en `coder.c` si la Norm te obliga a partir) |
+> | `heap.c` | ❌ | lo creas en M6 (FIFO/EDF) |
+> | `monitor.c`, `cleanup.c` | ❌ | M7 / `cleanup()` vive hoy en `init.c:70` |
+>
+> O sea: la tabla es el **destino**, no el estado actual. Cuando crees o muevas un
+> fichero, actualízala (y la tabla de archivos sugeridos de la Lección 14.2).
 
 ## Recursos para estudiar
 
