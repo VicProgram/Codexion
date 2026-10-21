@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/19 20:48:01 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 15:59:01 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/21 16:41:11 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,6 +23,7 @@ static int	init_dongles(t_sim *sim)
 	while (i < sim->n_coders)
 	{
 		pthread_mutex_init(&sim->dongles[i].mutex, NULL);
+		pthread_cond_init(&sim->dongles[i].cond, NULL);
 		sim->dongles[i].is_free = 1;
 		sim->dongles[i].cooldown_until = 0;
 		i++;
@@ -74,6 +75,7 @@ void	cleanup(t_sim *sim)
 	while (sim->n_coders > i)
 	{
 		pthread_mutex_destroy(&sim->dongles[i].mutex);
+		pthread_cond_destroy(&sim->dongles->cond);
 		i++;
 	}
 	pthread_mutex_destroy(&sim->stop_mutex);

@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 15:58:59 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/21 16:41:21 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,6 +45,7 @@ typedef struct s_sim
 typedef struct s_dongle
 {
 	pthread_mutex_t	mutex;
+	pthread_cond_t	cond;
 	int				is_free;
 	long			cooldown_until;
 }	t_dongle;
@@ -71,5 +72,7 @@ void	fill_sim(t_sim *sim, char **args);
 void	cleanup(t_sim *sim);
 void	*coder_loop(void *arg);
 void	join_threads(t_sim *sim, int n);
+void	take_dongle(t_dongle *dongle);
+void	release_dongle(t_dongle *dongle);
 
 #endif
