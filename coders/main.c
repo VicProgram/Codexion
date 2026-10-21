@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/19 19:55:13 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 15:49:15 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/21 15:58:58 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,7 +31,8 @@ void	run_sim(t_sim *sim)
 	i = 0;
 	while (i < sim->n_coders)
 	{
-		if (pthread_create(&sim->coders[i].thread, NULL, coder_loop, &sim->coders[i]) != 0)
+		if (pthread_create(&sim->coders[i].thread, NULL,
+				coder_loop, &sim->coders[i]) != 0)
 			break ;
 		i++;
 	}
