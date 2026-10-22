@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/19 20:48:01 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 19:41:35 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/22 13:49:15 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,6 +25,7 @@ static int	init_dongles(t_sim *sim)
 		pthread_mutex_init(&sim->dongles[i].mutex, NULL);
 		pthread_cond_init(&sim->dongles[i].cond, NULL);
 		sim->dongles[i].is_free = 1;
+		sim->dongles[i].cooldown_ms = sim->dongle_cooldown;
 		sim->dongles[i].cooldown_until = 0;
 		i++;
 	}

@@ -17,7 +17,7 @@ CC = cc
 
 CFLAGS = -Wall -Wextra -Werror -pthread
 
-SRC = main.c parser.c init.c coder.c
+SRC = main.c parser.c init.c coder.c time.c
 OBJ = $(SRC:.c=.o)
 
 RM = rm -f
