@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/20 19:04:39 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/21 19:41:38 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/22 12:46:32 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,8 @@ void	release_dongle(t_dongle *dongle)
 	pthread_mutex_unlock(&dongle->mutex);
 }
 
+// QUITAR LOS PRINTS
+
 void	*coder_loop(void *arg)
 {
 	t_coder	*c;
@@ -36,13 +38,23 @@ void	*coder_loop(void *arg)
 	c = arg;
 	while (c->compile_times < c->sim->compiles_required)
 	{
-		take_dongle(c->left);
-		take_dongle(c->right);
+		if (c->left == c->right)
+			take_dongle(c->left);
+		else
+		{
+			take_dongle(c->left);
+			take_dongle(c->right);
+		}
 		printf("Compile\n");
 		usleep(c->sim->comp_time * 1000);
 		c->compile_times += 1;
-		release_dongle(c->left);
-		release_dongle(c->right);
+		if (c->left == c->right)
+			release_dongle(c->left);
+		else
+		{
+			release_dongle(c->left);
+			release_dongle(c->right);
+		}
 		printf("Debug\n");
 		usleep(c->sim->debug_time * 1000);
 		printf("Refactor\n");
