@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 14:14:33 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/22 14:27:34 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/22 14:52:31 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,8 +20,16 @@ long	get_time_ms(void)
 	return (tv.tv_sec * 1000L + tv.tv_usec / 1000L);
 }
 
-void	ms_to_timespec(long ms, struct timespec *ts)
+static void	ms_to_timespec(long ms, struct timespec *ts)
 {
 	ts->tv_sec = ms / 1000L;
 	ts->tv_nsec = (ms % 1000L) * 1000000L;
+}
+
+void	wait_until_ms(pthread_cond_t *cond, pthread_mutex_t *mutex, long ms)
+{
+	struct timespec	ts;
+
+	ms_to_timespec(ms, &ts);
+	pthread_cond_timedwait(cond, mutex, &ts);
 }

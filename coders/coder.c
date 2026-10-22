@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/20 19:04:39 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/22 14:27:36 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/22 14:52:52 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,24 @@
 
 void	take_dongle(t_dongle *dongle)
 {
+	long	now;
+
 	pthread_mutex_lock(&dongle->mutex);
+	while (1)
+	{
+		if (dongle->is_free == 1)
+		{
+			now = get_time_ms();
+			if (now >= dongle->cooldown_until)
+			{
+				dongle->is_free = 1;
+				pthread_mutex_unlock(&dongle->mutex);
+				return ;
+			}
+		}
+		wait_until_ms(&dongle->cond,
+			&dongle->mutex, dongle->cooldown_until);
+	}
 	while (dongle->is_free == 0 || get_time_ms() < dongle->cooldown_until)
 		pthread_cond_wait(&dongle->cond, &dongle->mutex);
 	dongle->is_free = 0;

@@ -6,7 +6,7 @@
 /*   By: vabad-ro <vabad-ro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/16 13:52:54 by vabad-ro          #+#    #+#             */
-/*   Updated: 2026/10/22 14:27:38 by vabad-ro         ###   ########.fr       */
+/*   Updated: 2026/10/22 14:45:04 by vabad-ro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -70,8 +70,7 @@ int		parse_args(t_sim *sim, char **args);
 int		init(t_sim *sim);
 
 long	get_time_ms(void);
-void	ms_to_timespec(long ms, struct timespec *ts);
-
+void	wait_until_ms(pthread_cond_t *cond, pthread_mutex_t *mutex, long ms);
 
 void	run_sim(t_sim *sim);
 void	fill_sim(t_sim *sim, char **args);
